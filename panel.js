@@ -23,7 +23,6 @@ const el = {
   btnStopAll: $('btnStopAll')
 };
 
-const MAX_SLOTS = 6;
 const SIZE_WARN = 20 * 1024 * 1024; // 20MB
 
 /** @type {Array<object>} */
@@ -133,12 +132,6 @@ function probeDuration(file) {
   });
 }
 
-function nextSlot() {
-  const used = new Set(sounds.map((s) => s.slot).filter(Boolean));
-  for (let i = 1; i <= MAX_SLOTS; i++) if (!used.has(i)) return i;
-  return null;
-}
-
 async function addFiles(fileList) {
   const files = [...fileList].filter((f) => f.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|aac|flac)$/i.test(f.name));
   if (files.length === 0) {
@@ -165,7 +158,6 @@ async function addFiles(fileList) {
       name: file.name.replace(/\.[^.]+$/, ''),
       kind,
       duration,
-      slot: nextSlot(),
       ...PRESET[kind]
     });
   }
@@ -203,12 +195,10 @@ function renderCue(sound) {
   card.className = `cue cue--${sound.kind}${isPlaying ? ' is-playing' : ''}`;
   card.dataset.id = sound.id;
 
-  /* 左レール：スロット番号 */
+  /* 左レール：種別インジケータ。再生中に灯る */
   const rail = document.createElement('div');
   rail.className = 'cue__rail';
-  rail.innerHTML = `
-    <span>${sound.slot ? 'Q' + sound.slot : '–'}</span>
-    <span class="cue__railsub">${sound.kind === 'bgm' ? 'BED' : 'HIT'}</span>`;
+  rail.innerHTML = `<span>${sound.kind === 'bgm' ? 'BED' : 'HIT'}</span>`;
   card.appendChild(rail);
 
   const body = document.createElement('div');
@@ -279,7 +269,7 @@ function renderCue(sound) {
   row1.append(kind, go, halt);
   body.appendChild(row1);
 
-  /* 3段目：音量 / スロット */
+  /* 3段目：音量 */
   const row2 = document.createElement('div');
   row2.className = 'cue__row';
 
@@ -304,28 +294,7 @@ function renderCue(sound) {
   });
   lvl.addEventListener('change', () => chrome.storage.local.set({ sounds }));
 
-  const slot = document.createElement('select');
-  slot.className = 'slot';
-  slot.title = 'キーボードショートカットのスロット';
-  const none = document.createElement('option');
-  none.value = ''; none.textContent = '–';
-  slot.appendChild(none);
-  for (let i = 1; i <= MAX_SLOTS; i++) {
-    const o = document.createElement('option');
-    o.value = String(i);
-    o.textContent = `Q${i}`;
-    if (sound.slot === i) o.selected = true;
-    slot.appendChild(o);
-  }
-  slot.addEventListener('change', async () => {
-    const v = slot.value ? Number(slot.value) : null;
-    // 同じスロットを他が使っていたら外す（1スロット1音源）
-    if (v) for (const s of sounds) if (s !== sound && s.slot === v) s.slot = null;
-    sound.slot = v;
-    await persistSounds({ reload: false });
-  });
-
-  row2.append(tag, lvl, num, slot);
+  row2.append(tag, lvl, num);
   body.appendChild(row2);
 
   card.appendChild(body);

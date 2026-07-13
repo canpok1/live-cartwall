@@ -2,7 +2,6 @@
  * Tab Audio Console — service worker
  *  - 操作パネル（別ウィンドウ）の開閉
  *  - パネル → 対象タブ へのメッセージ中継
- *  - キーボードショートカット（Q1〜Q6 / 全停止）
  *  - 対象タブが遷移したときの content script 再注入
  * ========================================================================= */
 
@@ -123,23 +122,4 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   const { targetTabId } = await chrome.storage.local.get('targetTabId');
   if (tabId === targetTabId) await chrome.storage.local.remove('targetTabId');
-});
-
-/* ---------- キーボードショートカット ---------- */
-
-chrome.commands.onCommand.addListener(async (command) => {
-  if (command === 'all-stop') {
-    await sendToTab({ type: 'STOP_ALL' });
-    return;
-  }
-
-  const m = /^cue-(\d)$/.exec(command);
-  if (!m) return;
-
-  const slot = Number(m[1]);
-  const { sounds = [] } = await chrome.storage.local.get('sounds');
-  const sound = sounds.find((s) => s.slot === slot);
-  if (!sound) return;
-
-  await sendToTab({ type: 'PLAY', id: sound.id });
 });
