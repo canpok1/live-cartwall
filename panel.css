@@ -1,0 +1,490 @@
+/* =========================================================================
+ * Tab Audio Console — 操作卓
+ * 舞台袖の音響ラックを机上に置いた見立て。
+ * タングステン(琥珀) = 効果音のヒット / クールブルー = 空間を満たすBGM
+ * ========================================================================= */
+
+:root {
+  --rack:    #17130f;
+  --panel:   #221c16;
+  --panel-2: #2b241c;
+  --rule:    #3b3128;
+  --rule-2:  #4c4034;
+
+  --text:    #efe7da;
+  --dim:     #9c8f7d;
+  --faint:   #6d6355;
+
+  --amber:   #e8a33d;   /* 効果音 */
+  --cool:    #6fa8b8;   /* BGM */
+  --live:    #d8443c;   /* 全停止 / ON AIR */
+
+  --mono: ui-monospace, "SF Mono", "Menlo", "Roboto Mono", monospace;
+  --sans: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--rack);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- ON AIR レール ---------- */
+
+.rail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #100d0a, #1b1611);
+  border-bottom: 1px solid var(--rule);
+}
+
+.rail__lamp {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--faint);
+  box-shadow: none;
+  transition: background .18s, box-shadow .18s;
+}
+
+.rail__label {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.rail.is-live .rail__lamp {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px rgba(232, 163, 61, .16), 0 0 12px rgba(232, 163, 61, .7);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.rail.is-live .rail__label { color: var(--amber); }
+
+.rail.is-warn .rail__lamp { background: var(--live); box-shadow: 0 0 8px rgba(216, 68, 60, .6); }
+.rail.is-warn .rail__label { color: #eb8c86; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .45; }
+}
+
+.rail__btn {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: var(--dim);
+  background: transparent;
+  border: 1px solid var(--rule-2);
+  border-radius: 3px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.rail__btn:hover { color: var(--text); border-color: var(--dim); }
+
+/* ---------- ベイ（区画） ---------- */
+
+.bay {
+  flex: 0 0 auto;
+  padding: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.bay--grow {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.bay__title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.bay__hint {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--faint);
+}
+
+.note {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--dim);
+}
+.note.is-bad { color: #eb8c86; }
+.note.is-good { color: #9dc98a; }
+
+/* ---------- タブ選択 ---------- */
+
+.patch {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.patch__select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--rule-2);
+  border-radius: 4px;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+/* ---------- ボタン ---------- */
+
+.btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .08em;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--rule-2);
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.btn:hover { border-color: var(--dim); background: #362d23; }
+.btn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.btn--wide { display: block; width: 100%; }
+.btn--ghost { background: transparent; padding: 8px 10px; }
+
+/* ---------- キューカード ---------- */
+
+.cues { display: flex; flex-direction: column; gap: 8px; }
+
+.cue {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+/* 左のキューレール：スロット番号。再生中に灯る */
+.cue__rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: #1b1610;
+  border-right: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
+  transition: background .15s, color .15s;
+}
+
+.cue__railsub {
+  font-size: 8px;
+  letter-spacing: .1em;
+  color: var(--faint);
+}
+
+.cue__body { padding: 9px 11px; min-width: 0; }
+
+.cue__top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.cue__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.cue__dur {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.cue__x {
+  background: none;
+  border: 0;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.cue__x:hover { color: var(--live); }
+
+.cue__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cue__row + .cue__row { margin-top: 7px; }
+
+/* 種別トグル */
+.kind {
+  display: flex;
+  border: 1px solid var(--rule-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.kind__opt {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: .08em;
+  padding: 4px 7px;
+  background: transparent;
+  border: 0;
+  color: var(--faint);
+  cursor: pointer;
+}
+.kind__opt.is-on { color: var(--rack); font-weight: 700; }
+
+.cue--se  .kind__opt.is-on { background: var(--amber); }
+.cue--bgm .kind__opt.is-on { background: var(--cool); }
+
+/* GO / STOP */
+.go {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  padding: 7px;
+  border: 0;
+  border-radius: 3px;
+  color: var(--rack);
+  cursor: pointer;
+}
+.cue--se  .go { background: var(--amber); }
+.cue--bgm .go { background: var(--cool); }
+.go:hover { filter: brightness(1.12); }
+.go:active { transform: translateY(1px); }
+
+.halt {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  padding: 7px 10px;
+  background: transparent;
+  border: 1px solid var(--rule-2);
+  border-radius: 3px;
+  color: var(--dim);
+  cursor: pointer;
+}
+.halt:hover { border-color: var(--live); color: #eb8c86; }
+
+/* 音量 */
+.lvl { flex: 1; }
+.lvl__num {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+  width: 26px;
+  text-align: right;
+}
+.lvl__tag {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .1em;
+  color: var(--faint);
+  width: 30px;
+}
+
+/* スロット選択 */
+.slot {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 5px;
+  background: var(--panel-2);
+  color: var(--dim);
+  border: 1px solid var(--rule-2);
+  border-radius: 3px;
+}
+
+/* 再生中の点灯 */
+.cue.is-playing { border-color: var(--rule-2); }
+.cue.is-playing .cue__rail { color: var(--rack); }
+.cue--se.is-playing  .cue__rail { background: var(--amber); }
+.cue--bgm.is-playing .cue__rail { background: var(--cool); }
+.cue.is-playing .cue__railsub { color: rgba(23, 19, 15, .65); }
+
+/* ---------- 空状態 ---------- */
+
+.empty {
+  padding: 18px 4px 12px;
+  text-align: center;
+}
+.empty__head {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+.empty__body { font-size: 11px; color: var(--faint); }
+.empty.is-hidden { display: none; }
+
+/* ---------- ドロップゾーン ---------- */
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px dashed var(--rule-2);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.drop:hover, .drop.is-over {
+  border-color: var(--amber);
+  background: rgba(232, 163, 61, .05);
+}
+.drop__main {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  color: var(--text);
+}
+.drop__sub { font-size: 10px; color: var(--faint); }
+
+/* ---------- マスター & 全停止 ---------- */
+
+.deck {
+  flex: 0 0 auto;
+  padding: 12px 14px 14px;
+  background: linear-gradient(180deg, #1b1611, #100d0a);
+  border-top: 1px solid var(--rule);
+}
+
+.fader {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 11px;
+}
+.fader__label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--faint);
+  width: 52px;
+}
+.fader__range { flex: 1; }
+.fader__val {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  width: 28px;
+  text-align: right;
+}
+
+.stopall {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .22em;
+  color: #ffe9e7;
+  background: #3a1a18;
+  border: 1px solid #6d2b26;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.stopall:hover { background: var(--live); border-color: var(--live); color: #fff; }
+.stopall:active { transform: translateY(1px); }
+.stopall__key {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .05em;
+  color: #b2726d;
+  border: 1px solid #6d2b26;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.stopall:hover .stopall__key { color: #fff; border-color: rgba(255,255,255,.5); }
+
+/* ---------- レンジ入力（共通） ---------- */
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: var(--rule-2);
+  border-radius: 2px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2px solid var(--rack);
+  cursor: pointer;
+}
+input[type="range"]:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+
+.cue--se  input[type="range"]::-webkit-slider-thumb { background: var(--amber); }
+.cue--bgm input[type="range"]::-webkit-slider-thumb { background: var(--cool); }
+
+/* ---------- スクロールバー ---------- */
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--rack); }
+::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--rule-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

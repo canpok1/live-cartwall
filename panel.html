@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Tab Audio Console</title>
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body>
+
+  <!-- ===== ON AIR バー（シグネチャ） ===== -->
+  <header class="rail" id="rail">
+    <span class="rail__lamp" aria-hidden="true"></span>
+    <span class="rail__label" id="railLabel">待機中</span>
+    <button class="rail__btn" id="btnReload" type="button" title="音源を読み直す">再読込</button>
+  </header>
+
+  <!-- ===== 接続先タブ ===== -->
+  <section class="bay">
+    <h2 class="bay__title">出力先タブ</h2>
+
+    <div class="patch">
+      <select id="tabSelect" class="patch__select" aria-label="画面共有するタブ"></select>
+      <button id="btnRefresh" class="btn btn--ghost" type="button" title="タブ一覧を更新">↻</button>
+    </div>
+
+    <button id="btnConnect" class="btn btn--wide" type="button">このタブに接続</button>
+
+    <p class="note" id="connNote">
+      画面共有するスライドのタブを選んで接続します。音はこのタブの中で鳴ります。
+    </p>
+  </section>
+
+  <!-- ===== キュー一覧 ===== -->
+  <section class="bay bay--grow">
+    <h2 class="bay__title">
+      キュー
+      <span class="bay__hint">Q1–Q3・全停止はショートカットで叩けます</span>
+    </h2>
+
+    <div id="cues" class="cues"></div>
+
+    <div id="empty" class="empty">
+      <p class="empty__head">音源がまだありません</p>
+      <p class="empty__body">BGMとドラムロールの音声ファイルを読み込むと、ここに再生ボタンが並びます。</p>
+    </div>
+
+    <label class="drop" id="drop">
+      <input type="file" id="fileInput" accept="audio/*" multiple hidden />
+      <span class="drop__main">音源を追加</span>
+      <span class="drop__sub">クリック、またはファイルをドロップ（mp3 / wav / m4a / ogg）</span>
+    </label>
+  </section>
+
+  <!-- ===== マスター & 全停止 ===== -->
+  <footer class="deck">
+    <div class="fader">
+      <label class="fader__label" for="master">マスター</label>
+      <input type="range" id="master" class="fader__range" min="0" max="1" step="0.01" value="1" />
+      <output class="fader__val" id="masterVal">100</output>
+    </div>
+
+    <button id="btnStopAll" class="stopall" type="button">
+      <span class="stopall__key">⌥⇧0</span>
+      全停止
+    </button>
+  </footer>
+
+  <script src="panel.js"></script>
+</body>
+</html>
