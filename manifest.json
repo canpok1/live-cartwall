@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Tab Audio Console",
+  "name": "Live Cartwall",
   "version": "1.0.0",
   "description": "画面共有中のタブの中でBGM・効果音を再生する操作卓。操作パネルは別ウィンドウなので、共有画面には映りません。",
   "minimum_chrome_version": "116",

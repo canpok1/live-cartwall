@@ -1,5 +1,5 @@
 /* =========================================================================
- * Tab Audio Console — 操作パネル
+ * Live Cartwall — 操作パネル
  * このウィンドウは音を鳴らしません。対象タブに「鳴らせ」と指示するだけです。
  * （パネルで直接鳴らすと、その音は画面共有に乗りません）
  * ========================================================================= */
@@ -68,6 +68,46 @@ const PRESET = {
   se:  { loop: false, overlap: true,  fadeIn: 0,   fadeOut: 0,   volume: 0.85 }
 };
 
+/* ---------- ボタンの色 ----------
+ * 色は種別（kind）から切り離し、ボタンごとに任意で持たせる（sound.color）。
+ * 種別は挙動（PRESET）とバッジ表示だけに使う。
+ */
+
+/* 色未設定のボタンの初期値・不正値のフォールバック（従来の種別色を踏襲） */
+const DEFAULT_COLOR = { bgm: '#6fa8b8', se: '#e8a33d' };
+
+/* 色ピッカーに添えるプリセットスウォッチ */
+const PRESET_COLORS = ['#e8a33d', '#6fa8b8', '#d8443c', '#7bb661', '#a98fd8', '#e88fb8', '#e8d24d', '#9c8f7d'];
+
+/* タイルに常時出す種別バッジのラベル（色ではなく文字で種別を示す） */
+const KIND_LABEL = { bgm: 'BGM', se: 'SE' };
+
+/** '#rrggbb' なら正規化して返す。不正なら種別の既定色へフォールバック。 */
+function normalizeColor(color, kind) {
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color.toLowerCase() : (DEFAULT_COLOR[kind] ?? DEFAULT_COLOR.se);
+}
+
+/**
+ * 背景色に載せる文字色を、相対輝度から明(#efe7da)/暗(#17130f)で選ぶ。
+ * 任意色は明暗が不定なので、コントラスト比が高い方を採る。
+ */
+function contrastInk(hex) {
+  const m = /^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/.exec(hex);
+  if (!m) return '#17130f';
+  const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const L = 0.2126 * lin(parseInt(m[1], 16)) + 0.7152 * lin(parseInt(m[2], 16)) + 0.0722 * lin(parseInt(m[3], 16));
+  const INK_LIGHT = 0.83, INK_DARK = 0.006; // #efe7da / #17130f の相対輝度
+  const contrast = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  return contrast(L, INK_DARK) >= contrast(L, INK_LIGHT) ? '#17130f' : '#efe7da';
+}
+
+/** タイル要素にボタンの色と、その上に載る文字色を反映する。 */
+function applyTileColor(tile, color, kind) {
+  const c = normalizeColor(color, kind);
+  tile.style.setProperty('--tile-color', c);
+  tile.style.setProperty('--tile-ink', contrastInk(c));
+}
+
 /* ---------- ストレージ ---------- */
 
 async function loadState() {
@@ -78,6 +118,14 @@ async function loadState() {
   mode = s.mode === 'operate' ? 'operate' : 'edit';
   tileWidth = s.tileWidth ?? 96;
   tileHeight = s.tileHeight ?? 72;
+
+  // 旧データ（color 未設定）は種別の既定色を補い、以後は永続化する
+  let migrated = false;
+  for (const snd of sounds) {
+    const color = normalizeColor(snd.color, snd.kind);
+    if (snd.color !== color) { snd.color = color; migrated = true; }
+  }
+  if (migrated) await chrome.storage.local.set({ sounds });
 }
 
 async function persistSounds({ reload = true } = {}) {
@@ -404,6 +452,7 @@ async function addFiles(fileList) {
       id,
       name: file.name.replace(/\.[^.]+$/, ''),
       kind,
+      color: DEFAULT_COLOR[kind],
       duration,
       ...PRESET[kind]
     });
@@ -488,6 +537,7 @@ function renderTile(sound) {
   tile.dataset.id = sound.id;
   tile.tabIndex = 0;
   tile.setAttribute('role', 'button');
+  applyTileColor(tile, sound.color, sound.kind);
 
   /* タイルタップ：BGM(loop)は再生⇄停止トグル、効果音(overlap)は毎回再生 */
   const trigger = async () => {
@@ -542,6 +592,21 @@ function renderTile(sound) {
     await persistSounds({ reload: false });
   });
 
+  /* 種別バッジ（色ではなく文字で BGM / 効果音 を示す。両モードで常時表示） */
+  const badge = document.createElement('span');
+  badge.className = 'tile__badge';
+  badge.textContent = KIND_LABEL[sound.kind] ?? sound.kind;
+  badge.title = sound.kind === 'bgm' ? 'BGM' : '効果音';
+  tile.appendChild(badge);
+
+  /* 再生状態バッジ（▶）。表示/非表示は is-playing クラスに応じて CSS が制御する。 */
+  const state = document.createElement('span');
+  state.className = 'tile__state';
+  state.textContent = '▶';
+  state.title = '再生中';
+  state.setAttribute('aria-label', '再生中');
+  tile.appendChild(state);
+
   /* 表示名（主体） */
   const name = document.createElement('span');
   name.className = 'tile__name';
@@ -563,7 +628,7 @@ function renderTile(sound) {
   kebab.title = '編集';
   kebab.setAttribute('aria-label', '編集メニュー');
 
-  const menu = buildTileMenu(sound, name);
+  const menu = buildTileMenu(sound, name, tile);
 
   kebab.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -576,8 +641,8 @@ function renderTile(sound) {
   return tile;
 }
 
-/** kebab から開くポップオーバー。表示名変更・音量・種別切替・削除を収める。 */
-function buildTileMenu(sound, nameEl) {
+/** kebab から開くポップオーバー。表示名変更・種別切替・色・音量・削除を収める。 */
+function buildTileMenu(sound, nameEl, tile) {
   const menu = document.createElement('div');
   menu.className = 'tile__menu';
   /* メニュー内のクリックはタイルタップ（再生）や外側クリック（閉じる）へ波及させない */
@@ -614,6 +679,48 @@ function buildTileMenu(sound, nameEl) {
     kind.appendChild(b);
   }
   menu.appendChild(kind);
+
+  /* 色（ボタンごとの任意色）：カラーピッカー＋プリセットスウォッチ */
+  const colorRow = document.createElement('div');
+  colorRow.className = 'tile__color';
+
+  const picker = document.createElement('input');
+  picker.type = 'color';
+  picker.className = 'tile__colorpick';
+  picker.value = normalizeColor(sound.color, sound.kind);
+  picker.setAttribute('aria-label', 'ボタンの色');
+
+  const swatches = document.createElement('div');
+  swatches.className = 'tile__swatches';
+
+  /* 色を反映する。persist=false は入力中のライブ反映（保存はしない）。 */
+  const applyColor = (value, { persist }) => {
+    sound.color = normalizeColor(value, sound.kind);
+    picker.value = sound.color;
+    applyTileColor(tile, sound.color, sound.kind);
+    for (const sw of swatches.children) {
+      sw.classList.toggle('is-on', sw.dataset.color === sound.color);
+    }
+    if (persist) chrome.storage.local.set({ sounds });
+  };
+
+  for (const preset of PRESET_COLORS) {
+    const sw = document.createElement('button');
+    sw.type = 'button';
+    sw.className = `tile__swatch${sound.color === preset ? ' is-on' : ''}`;
+    sw.dataset.color = preset;
+    sw.style.background = preset;
+    sw.title = preset;
+    sw.setAttribute('aria-label', `色 ${preset}`);
+    sw.addEventListener('click', () => applyColor(preset, { persist: true }));
+    swatches.appendChild(sw);
+  }
+
+  picker.addEventListener('input', () => applyColor(picker.value, { persist: false }));
+  picker.addEventListener('change', () => applyColor(picker.value, { persist: true }));
+
+  colorRow.append(picker, swatches);
+  menu.appendChild(colorRow);
 
   /* 音量 */
   const vol = document.createElement('div');
