@@ -346,7 +346,8 @@ body {
   justify-content: center;
   gap: 4px;
   min-height: 72px;
-  padding: 12px 10px;
+  /* 上辺はバッジ（左上）と kebab（右上）の帯。名前と重ならないよう余白を確保 */
+  padding: 20px 10px 12px;
   background: var(--panel);
   border: 1px solid var(--rule);
   border-top: 2px solid var(--rule-2);
@@ -368,8 +369,8 @@ body:not(.is-operate) .tile { cursor: grab; }
 .tile.drag-before { box-shadow: inset 3px 0 0 0 var(--amber); }
 .tile.drag-after  { box-shadow: inset -3px 0 0 0 var(--amber); }
 
-.tile--se  { border-top-color: var(--amber); }
-.tile--bgm { border-top-color: var(--cool); }
+/* 上辺の色はボタンごとの任意色（--tile-color、JS がインラインで設定） */
+.tile { border-top-color: var(--tile-color, var(--rule-2)); }
 
 .tile__name {
   display: -webkit-box;
@@ -389,19 +390,36 @@ body:not(.is-operate) .tile { cursor: grab; }
   color: var(--faint);
 }
 
-/* 再生中の点灯：タイル全面を種別色で灯す */
-.tile.is-playing { color: var(--rack); }
-.tile--se.is-playing {
-  background: var(--amber);
-  border-color: var(--amber);
-  box-shadow: 0 0 14px rgba(232, 163, 61, .45);
+/* 種別バッジ：色ではなく文字で BGM / SE を示す。編集・操作の両モードで常時表示。 */
+.tile__badge {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  line-height: 1.4;
+  color: var(--text);
+  background: rgba(0, 0, 0, .34);
+  border-radius: 3px;
+  pointer-events: none;
 }
-.tile--bgm.is-playing {
-  background: var(--cool);
-  border-color: var(--cool);
-  box-shadow: 0 0 14px rgba(111, 168, 184, .45);
+/* 再生中はボタンの色が地色になるため、文字色を地色に合わせる */
+.tile.is-playing .tile__badge {
+  color: var(--tile-ink, var(--rack));
+  background: color-mix(in srgb, var(--tile-ink, var(--rack)) 14%, transparent);
 }
-.tile.is-playing .tile__dur { color: rgba(23, 19, 15, .7); }
+
+/* 再生中の点灯：タイル全面をボタンの色で灯す。文字色は輝度から自動選択（--tile-ink） */
+.tile.is-playing {
+  color: var(--tile-ink, var(--rack));
+  background: var(--tile-color);
+  border-color: var(--tile-color);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--tile-color) 45%, transparent);
+}
+.tile.is-playing .tile__dur { color: color-mix(in srgb, var(--tile-ink, var(--rack)) 72%, transparent); }
 
 /* 隅の kebab（編集モードのみ表示） */
 .tile__kebab {
@@ -422,8 +440,8 @@ body:not(.is-operate) .tile { cursor: grab; }
   cursor: pointer;
 }
 .tile__kebab:hover { background: rgba(255, 255, 255, .1); color: var(--text); }
-.tile.is-playing .tile__kebab { color: rgba(23, 19, 15, .75); }
-.tile.is-playing .tile__kebab:hover { background: rgba(0, 0, 0, .12); color: var(--rack); }
+.tile.is-playing .tile__kebab { color: color-mix(in srgb, var(--tile-ink, var(--rack)) 75%, transparent); }
+.tile.is-playing .tile__kebab:hover { background: rgba(0, 0, 0, .12); color: var(--tile-ink, var(--rack)); }
 body.is-operate .tile__kebab { display: none; }
 
 /* ---------- タイル編集メニュー（ポップオーバー） ---------- */
@@ -497,10 +515,44 @@ body.is-operate .tile__kebab { display: none; }
   color: var(--faint);
   cursor: pointer;
 }
-.kind__opt.is-on { color: var(--rack); font-weight: 700; }
+/* 種別は色を表さなくなったので、選択状態は中立アクセントで示す */
+.kind__opt.is-on { background: var(--dim); color: var(--rack); font-weight: 700; }
 
-.tile--se  .kind__opt.is-on { background: var(--amber); }
-.tile--bgm .kind__opt.is-on { background: var(--cool); }
+/* 色設定（カラーピッカー＋プリセットスウォッチ） */
+.tile__color {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tile__colorpick {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--rule-2);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tile__colorpick::-webkit-color-swatch-wrapper { padding: 2px; }
+.tile__colorpick::-webkit-color-swatch { border: none; border-radius: 2px; }
+.tile__swatches {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tile__swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--rule-2);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: transform .1s;
+}
+.tile__swatch:hover { transform: scale(1.12); }
+.tile__swatch.is-on { outline: 2px solid var(--text); outline-offset: 1px; }
 
 /* 音量 */
 .lvl { flex: 1; }
@@ -649,8 +701,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 input[type="range"]:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
 
-.tile--se  input[type="range"]::-webkit-slider-thumb { background: var(--amber); }
-.tile--bgm input[type="range"]::-webkit-slider-thumb { background: var(--cool); }
+.tile input[type="range"]::-webkit-slider-thumb { background: var(--tile-color, var(--text)); }
 
 /* ---------- スクロールバー ---------- */
 
