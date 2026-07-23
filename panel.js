@@ -14,6 +14,10 @@ const el = {
   btnRefresh: $('btnRefresh'),
   btnConnect: $('btnConnect'),
   connNote: $('connNote'),
+  sourceSelect: $('sourceSelect'),
+  btnAddSource: $('btnAddSource'),
+  tabSources: $('tabSources'),
+  sourceNote: $('sourceNote'),
   cues: $('cues'),
   empty: $('empty'),
   drop: $('drop'),
@@ -30,6 +34,13 @@ let sounds = [];
 let masterVolume = 1;
 let targetTabId = null;
 let playingIds = new Set();
+
+/* タブ音源（ライブ音声のルーティング）。ストリームは揮発的なので永続化しない。
+ * 各要素: { sourceId, tabId, title, volume, connected } */
+let tabSources = [];
+let connectedSources = new Set();
+/* ソース選択に出す候補タブ（LIST_TABS の結果から出力タブを除外） */
+let availableTabs = [];
 
 /* ---------- 種別のプリセット ----------
  * bgm : 空間を満たす音。ループし、フェードで出入りする。控えめな音量。
@@ -63,6 +74,10 @@ function toTab(payload) {
 
 /* ---------- タブ選択 ---------- */
 
+function tabHost(url) {
+  try { return new URL(url).hostname; } catch { return ''; }
+}
+
 async function refreshTabs() {
   const res = await chrome.runtime.sendMessage({ type: 'LIST_TABS' });
   if (!res?.ok) return;
@@ -71,8 +86,7 @@ async function refreshTabs() {
   for (const t of res.tabs) {
     const opt = document.createElement('option');
     opt.value = String(t.id);
-    const host = (() => { try { return new URL(t.url).hostname; } catch { return ''; } })();
-    opt.textContent = `${t.title.slice(0, 46)} — ${host}`;
+    opt.textContent = `${t.title.slice(0, 46)} — ${tabHost(t.url)}`;
     if (t.id === targetTabId) opt.selected = true;
     el.tabSelect.appendChild(opt);
   }
@@ -82,6 +96,22 @@ async function refreshTabs() {
     opt.textContent = '(開いているタブがありません)';
     opt.disabled = true;
     el.tabSelect.appendChild(opt);
+  }
+
+  // ソース候補（出力先タブは自己キャプチャ防止のため除外）
+  availableTabs = res.tabs.filter((t) => t.id !== targetTabId);
+  el.sourceSelect.innerHTML = '';
+  for (const t of availableTabs) {
+    const opt = document.createElement('option');
+    opt.value = String(t.id);
+    opt.textContent = `${t.title.slice(0, 46)} — ${tabHost(t.url)}`;
+    el.sourceSelect.appendChild(opt);
+  }
+  if (availableTabs.length === 0) {
+    const opt = document.createElement('option');
+    opt.textContent = '(取り込めるタブがありません)';
+    opt.disabled = true;
+    el.sourceSelect.appendChild(opt);
   }
 }
 
@@ -104,6 +134,177 @@ async function connect() {
 function setNote(text, cls) {
   el.connNote.textContent = text;
   el.connNote.className = `note ${cls}`.trim();
+}
+
+/* ---------- タブ音源（ライブ音声のルーティング） ---------- */
+
+function setSourceNote(text, cls) {
+  el.sourceNote.textContent = text;
+  el.sourceNote.className = `note ${cls}`.trim();
+}
+
+/** 選択中のソースタブを出力先タブへ取り込む */
+async function addSource() {
+  if (targetTabId == null) {
+    setSourceNote('先に出力先タブへ接続してください。', 'is-bad');
+    return;
+  }
+  const tabId = Number(el.sourceSelect.value);
+  if (!Number.isFinite(tabId)) return;
+  if (tabId === targetTabId) {
+    setSourceNote('出力先タブ自身は取り込めません。', 'is-bad');
+    return;
+  }
+
+  const tab = availableTabs.find((t) => t.id === tabId);
+  const title = tab?.title || '(無題)';
+
+  setSourceNote('取り込んでいます…', '');
+  const res = await chrome.runtime.sendMessage({ type: 'GET_STREAM_ID', sourceTabId: tabId });
+  if (!res?.ok) {
+    setSourceNote(res?.error === 'NO_TAB'
+      ? '出力先タブが未設定です。先に接続してください。'
+      : 'このタブは取り込めませんでした。', 'is-bad');
+    return;
+  }
+
+  const sourceId = crypto.randomUUID();
+  const volume = 0.8;
+  const add = await toTab({ type: 'ADD_TAB_SOURCE', sourceId, streamId: res.streamId, volume });
+  if (!add?.ok) {
+    setSourceNote('音声の取り込みに失敗しました。もう一度お試しください。', 'is-bad');
+    return;
+  }
+
+  tabSources.push({ sourceId, tabId, title, volume, connected: true });
+  connectedSources.add(sourceId);
+  setSourceNote('取り込みました。出力先タブでのみ再生されます。', 'is-good');
+  renderTabSources();
+}
+
+/** 切断された（要再接続）ソースを、同じタブから取り込み直す */
+async function reconnectSource(src) {
+  if (targetTabId == null) {
+    setSourceNote('先に出力先タブへ接続してください。', 'is-bad');
+    return;
+  }
+  setSourceNote('再接続しています…', '');
+  const res = await chrome.runtime.sendMessage({ type: 'GET_STREAM_ID', sourceTabId: src.tabId });
+  if (!res?.ok) {
+    setSourceNote('タブが見つかりません。閉じられた可能性があります。', 'is-bad');
+    return;
+  }
+  const add = await toTab({ type: 'ADD_TAB_SOURCE', sourceId: src.sourceId, streamId: res.streamId, volume: src.volume });
+  if (!add?.ok) {
+    setSourceNote('再接続に失敗しました。', 'is-bad');
+    return;
+  }
+  src.connected = true;
+  connectedSources.add(src.sourceId);
+  setSourceNote('再接続しました。', 'is-good');
+  renderTabSources();
+}
+
+/** ルーティングを解除してパネルの一覧からも消す */
+async function removeSource(sourceId) {
+  await toTab({ type: 'REMOVE_TAB_SOURCE', sourceId });
+  tabSources = tabSources.filter((s) => s.sourceId !== sourceId);
+  connectedSources.delete(sourceId);
+  renderTabSources();
+}
+
+function renderTabSources() {
+  el.tabSources.innerHTML = '';
+  for (const src of tabSources) el.tabSources.appendChild(renderTabSource(src));
+}
+
+function renderTabSource(src) {
+  const connected = connectedSources.has(src.sourceId);
+
+  const row = document.createElement('div');
+  row.className = `tsrc__row${connected ? '' : ' is-lost'}`;
+  row.dataset.id = src.sourceId;
+
+  /* 1段目：接続状態 / タイトル / 解除 */
+  const top = document.createElement('div');
+  top.className = 'tsrc__top';
+
+  const dot = document.createElement('span');
+  dot.className = 'tsrc__dot';
+  dot.title = connected ? '接続中' : '切断（要再接続）';
+
+  const name = document.createElement('span');
+  name.className = 'tsrc__name';
+  name.textContent = src.title;
+  name.title = src.title;
+
+  const del = document.createElement('button');
+  del.className = 'tsrc__x';
+  del.type = 'button';
+  del.textContent = '解除';
+  del.title = 'ルーティングを解除';
+  del.addEventListener('click', () => removeSource(src.sourceId));
+
+  top.append(dot, name, del);
+  row.appendChild(top);
+
+  /* 2段目：音量、または要再接続 */
+  const bottom = document.createElement('div');
+  bottom.className = 'tsrc__row2';
+
+  if (connected) {
+    const tag = document.createElement('span');
+    tag.className = 'lvl__tag';
+    tag.textContent = 'VOL';
+
+    const lvl = document.createElement('input');
+    lvl.type = 'range';
+    lvl.className = 'lvl';
+    lvl.min = '0'; lvl.max = '1'; lvl.step = '0.01';
+    lvl.value = String(src.volume);
+
+    const num = document.createElement('output');
+    num.className = 'lvl__num';
+    num.textContent = String(Math.round(src.volume * 100));
+
+    lvl.addEventListener('input', () => {
+      src.volume = Number(lvl.value);
+      num.textContent = String(Math.round(src.volume * 100));
+      toTab({ type: 'SET_TAB_VOLUME', sourceId: src.sourceId, value: src.volume });
+    });
+
+    bottom.append(tag, lvl, num);
+  } else {
+    const lost = document.createElement('span');
+    lost.className = 'tsrc__lost';
+    lost.textContent = '要再接続';
+
+    const re = document.createElement('button');
+    re.className = 'tsrc__re';
+    re.type = 'button';
+    re.textContent = '再接続';
+    re.addEventListener('click', () => reconnectSource(src));
+
+    bottom.append(lost, re);
+  }
+
+  row.appendChild(bottom);
+  return row;
+}
+
+/**
+ * 接続状態の点灯だけを更新する。
+ * ここで renderTabSources() を呼ぶと、ドラッグ中の音量スライダーが作り直されて
+ * つまみが飛んでしまうため、状態が変わったときだけ作り直す。
+ */
+function paintTabSources(connectedNow) {
+  let changed = false;
+  for (const src of tabSources) {
+    const now = connectedNow.has(src.sourceId);
+    if (src.connected !== now) { src.connected = now; changed = true; }
+  }
+  connectedSources = connectedNow;
+  if (changed) renderTabSources();
 }
 
 /* ---------- 音源の追加 ---------- */
@@ -351,12 +552,16 @@ async function poll() {
   const res = await toTab({ type: 'PING' });
   handleTabResult(res);
   paintLive();
+  // 出力タブが応答し tabSources を返したときだけ接続状態を反映。
+  // 未接続・未注入時は全ソースを切断扱いにする。
+  paintTabSources(new Set(res?.ok && res.tabSources ? res.tabSources : []));
 }
 
 /* ---------- イベント配線 ---------- */
 
 el.btnRefresh.addEventListener('click', refreshTabs);
 el.btnConnect.addEventListener('click', connect);
+el.btnAddSource.addEventListener('click', addSource);
 el.btnReload.addEventListener('click', async () => {
   const res = await toTab({ type: 'RELOAD' });
   handleTabResult(res);
@@ -389,6 +594,10 @@ el.btnStopAll.addEventListener('click', async () => {
   const res = await toTab({ type: 'STOP_ALL' });
   handleTabResult(res);
   paintLive();
+  // 全停止はタブ音源のルーティングも解除する（出力から外れる）
+  tabSources = [];
+  connectedSources = new Set();
+  renderTabSources();
 });
 
 /* ---------- 起動 ---------- */

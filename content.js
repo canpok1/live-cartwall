@@ -24,6 +24,8 @@
   const meta = new Map();
   /** @type {Map<string, Set<{src:AudioBufferSourceNode, gain:GainNode}>>} 再生中ノード */
   const active = new Map();
+  /** @type {Map<string, {stream:MediaStream, srcNode:MediaStreamAudioSourceNode, gain:GainNode}>} タブ音源（ルーティング中のライブ音声） */
+  const tabSources = new Map();
 
   /* ---------------------------------------------------------------------
    * 自動再生ポリシー対策
@@ -56,6 +58,7 @@
       ctxState: ctx.state,          // 'running' | 'suspended'
       loaded: [...buffers.keys()],
       playing,
+      tabSources: [...tabSources.keys()],   // 接続中のタブ音源 sourceId
       href: location.href,
       title: document.title
     };
@@ -176,6 +179,8 @@
 
   function stopAll(immediate) {
     for (const id of [...active.keys()]) stop(id, immediate ? 0 : undefined);
+    // タブ音源も出力から外す（ソースタブ自体はタブ側で鳴り続ける）
+    removeAllTabSources();
     return status();
   }
 
@@ -196,6 +201,80 @@
     return status();
   }
 
+  /* ---------------------------------------------------------------------
+   * タブ音源（他タブのライブ音声）のルーティング
+   * ソースタブの音声を streamId 経由で受け取り、個別 GainNode を挟んで
+   * 既存の master に合流させる。これでファイル音源と同じマスター音量・
+   * 全停止の系統に乗る。ソースごとに独立管理するので、1つの解除・切断が
+   * 他のソースに影響しない。トランスポート（再生/停止/シーク）はソース
+   * タブ側で行い、ここで扱うのは音量とルーティングの接続/解除のみ。
+   * ------------------------------------------------------------------- */
+
+  /** ノードを切り離して Map から除去（stream の停止は行わない） */
+  function teardownTabSource(sourceId) {
+    const e = tabSources.get(sourceId);
+    if (!e) return;
+    try { e.srcNode.disconnect(); } catch (_) {}
+    try { e.gain.disconnect(); } catch (_) {}
+    tabSources.delete(sourceId);
+  }
+
+  async function addTabSource(sourceId, streamId, volume) {
+    // 同じ sourceId が残っていれば作り直す（再接続）
+    removeTabSource(sourceId);
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          mandatory: {
+            chromeMediaSource: 'tab',
+            chromeMediaSourceId: streamId
+          }
+        },
+        video: false
+      });
+    } catch (e) {
+      console.error('[TabAudioConsole] タブ音源の取得に失敗:', e);
+      return { ok: false, error: 'CAPTURE_FAILED' };
+    }
+
+    unlock();
+
+    const srcNode = ctx.createMediaStreamSource(stream);
+    const gain = ctx.createGain();
+    gain.gain.value = Math.max(0.0001, volume ?? 1);
+    srcNode.connect(gain);
+    gain.connect(master);
+
+    tabSources.set(sourceId, { stream, srcNode, gain });
+
+    // ソースタブを閉じる/リロードするとトラックが終了する → 自動クリーンアップ
+    const track = stream.getAudioTracks()[0];
+    if (track) track.onended = () => teardownTabSource(sourceId);
+
+    return status();
+  }
+
+  function setTabVolume(sourceId, value) {
+    const e = tabSources.get(sourceId);
+    if (e) e.gain.gain.setTargetAtTime(Math.max(0.0001, value), ctx.currentTime, 0.02);
+    return status();
+  }
+
+  /** ルーティングを解除する。track.stop() でソースタブのローカル音を復帰させる */
+  function removeTabSource(sourceId) {
+    const e = tabSources.get(sourceId);
+    if (!e) return status();
+    try { for (const t of e.stream.getTracks()) t.stop(); } catch (_) {}
+    teardownTabSource(sourceId);
+    return status();
+  }
+
+  function removeAllTabSources() {
+    for (const id of [...tabSources.keys()]) removeTabSource(id);
+  }
+
   /* --------------------------------------------------------------------- */
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -209,6 +288,9 @@
           case 'STOP_ALL':    sendResponse(stopAll(msg.immediate)); break;
           case 'SET_VOLUME':  sendResponse(setVolume(msg.id, msg.value)); break;
           case 'SET_MASTER':  sendResponse(setMaster(msg.value)); break;
+          case 'ADD_TAB_SOURCE':    sendResponse(await addTabSource(msg.sourceId, msg.streamId, msg.volume)); break;
+          case 'SET_TAB_VOLUME':    sendResponse(setTabVolume(msg.sourceId, msg.value)); break;
+          case 'REMOVE_TAB_SOURCE': sendResponse(removeTabSource(msg.sourceId)); break;
           case 'UNLOCK':      unlock(); sendResponse(status()); break;
           default:            sendResponse({ ok: false, error: 'UNKNOWN_TYPE' });
         }

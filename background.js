@@ -60,6 +60,22 @@ async function inject(tabId) {
   });
 }
 
+/* ---------- タブ音源のキャプチャ ID を発行 ----------
+ * ソースタブ（他タブで鳴っている音声）を、出力タブが getUserMedia で
+ * 受け取れるように、そのペア専用の streamId を発行する。
+ * targetTabId  : 音を取り込む「ソースタブ」
+ * consumerTabId: 音を受け取って再生する「出力タブ」
+ */
+function getStreamId(options) {
+  return new Promise((resolve, reject) => {
+    chrome.tabCapture.getMediaStreamId(options, (streamId) => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve(streamId);
+    });
+  });
+}
+
 /* ---------- パネルからのメッセージ中継 ---------- */
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -88,6 +104,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               audible: t.audible
             }))
         });
+        return;
+      }
+
+      if (msg?.type === 'GET_STREAM_ID') {
+        const { targetTabId } = await chrome.storage.local.get('targetTabId');
+        if (targetTabId == null) { sendResponse({ ok: false, error: 'NO_TAB' }); return; }
+        if (msg.sourceTabId === targetTabId) { sendResponse({ ok: false, error: 'SELF_CAPTURE' }); return; }
+        try {
+          const streamId = await getStreamId({
+            targetTabId: msg.sourceTabId,
+            consumerTabId: targetTabId
+          });
+          sendResponse({ ok: true, streamId });
+        } catch (e) {
+          sendResponse({ ok: false, error: String(e) });
+        }
         return;
       }
 
