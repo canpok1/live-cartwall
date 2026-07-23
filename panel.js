@@ -14,10 +14,14 @@ const el = {
   btnRefresh: $('btnRefresh'),
   btnConnect: $('btnConnect'),
   connNote: $('connNote'),
+  bayOutput: $('bayOutput'),
+  outputStatus: $('outputStatus'),
   sourceSelect: $('sourceSelect'),
   btnAddSource: $('btnAddSource'),
   tabSources: $('tabSources'),
   sourceNote: $('sourceNote'),
+  baySource: $('baySource'),
+  sourceStatus: $('sourceStatus'),
   modeEdit: $('modeEdit'),
   modeOperate: $('modeOperate'),
   buttons: $('buttons'),
@@ -132,6 +136,7 @@ async function connect() {
   if (res?.ok) {
     targetTabId = tabId;
     setNote('接続しました。このタブの中で音が鳴ります。', 'is-good');
+    updateOutputStatus();
     poll();
   } else {
     setNote('このタブには接続できません（Chromeの設定ページやストアのページなど）。別のタブを選んでください。', 'is-bad');
@@ -143,11 +148,34 @@ function setNote(text, cls) {
   el.connNote.className = `note ${cls}`.trim();
 }
 
+/* 折りたたみ見出しの要約（出力先タブの接続状態）を更新する */
+function updateOutputStatus() {
+  const connected = targetTabId != null;
+  el.outputStatus.textContent = connected ? '接続中' : '未接続';
+  el.outputStatus.className = `fold__status ${connected ? 'is-on' : 'is-off'}`;
+}
+
 /* ---------- タブ音源（ライブ音声のルーティング） ---------- */
 
 function setSourceNote(text, cls) {
   el.sourceNote.textContent = text;
   el.sourceNote.className = `note ${cls}`.trim();
+}
+
+/* 折りたたみ見出しの要約（タブ音源の件数・状態）を更新する */
+function updateSourceStatus() {
+  const n = tabSources.length;
+  const lost = tabSources.filter((s) => !connectedSources.has(s.sourceId)).length;
+  if (n === 0) {
+    el.sourceStatus.textContent = 'なし';
+    el.sourceStatus.className = 'fold__status is-off';
+  } else if (lost > 0) {
+    el.sourceStatus.textContent = `${n}件 · 要再接続${lost}`;
+    el.sourceStatus.className = 'fold__status is-warn';
+  } else {
+    el.sourceStatus.textContent = `${n}件`;
+    el.sourceStatus.className = 'fold__status is-on';
+  }
 }
 
 /** 選択中のソースタブを出力先タブへ取り込む */
@@ -223,6 +251,7 @@ async function removeSource(sourceId) {
 function renderTabSources() {
   el.tabSources.innerHTML = '';
   for (const src of tabSources) el.tabSources.appendChild(renderTabSource(src));
+  updateSourceStatus();
 }
 
 function renderTabSource(src) {
@@ -312,6 +341,7 @@ function paintTabSources(connectedNow) {
   }
   connectedSources = connectedNow;
   if (changed) renderTabSources();
+  else updateSourceStatus();
 }
 
 /* ---------- 音源の追加 ---------- */
@@ -735,8 +765,14 @@ el.btnStopAll.addEventListener('click', async () => {
   render();
   await refreshTabs();
 
+  updateOutputStatus();
+  updateSourceStatus();
+
   if (targetTabId != null) {
     setNote('前回の出力先タブを記憶しています。ページを開き直した場合は接続し直してください。', '');
+  } else {
+    // 未接続なら出力先タブの設定を開いておき、まず接続を促す
+    el.bayOutput.open = true;
   }
 
   poll();
