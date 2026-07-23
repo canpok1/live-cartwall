@@ -502,6 +502,9 @@ body.is-operate .tile__kebab { display: none; }
   flex-direction: column;
   gap: 8px;
   width: 190px;
+  /* 縦に収まらない場合は JS が付ける max-height の範囲でスクロールさせる */
+  max-width: calc(100vw - 12px);
+  overflow-y: auto;
   padding: 10px;
   background: var(--panel-2);
   border: 1px solid var(--rule-2);
