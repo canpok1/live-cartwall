@@ -24,6 +24,10 @@ const el = {
   sourceStatus: $('sourceStatus'),
   modeEdit: $('modeEdit'),
   modeOperate: $('modeOperate'),
+  tileW: $('tileW'),
+  tileWVal: $('tileWVal'),
+  tileH: $('tileH'),
+  tileHVal: $('tileHVal'),
   buttons: $('buttons'),
   empty: $('empty'),
   drop: $('drop'),
@@ -38,6 +42,9 @@ const SIZE_WARN = 20 * 1024 * 1024; // 20MB
 /** @type {Array<object>} */
 let sounds = [];
 let masterVolume = 1;
+/* 全ボタン共通のタイルサイズ（px）。編集モードの2本のバーで調整する。 */
+let tileWidth = 96;
+let tileHeight = 72;
 let targetTabId = null;
 let playingIds = new Set();
 /* 'edit' … タイル編集可（kebab・追加ドロップを表示） / 'operate' … タップ再生のみ */
@@ -104,11 +111,13 @@ function applyTileColor(tile, color, kind) {
 /* ---------- ストレージ ---------- */
 
 async function loadState() {
-  const s = await chrome.storage.local.get(['sounds', 'masterVolume', 'targetTabId', 'mode']);
+  const s = await chrome.storage.local.get(['sounds', 'masterVolume', 'targetTabId', 'mode', 'tileWidth', 'tileHeight']);
   sounds = s.sounds ?? [];
   masterVolume = s.masterVolume ?? 1;
   targetTabId = s.targetTabId ?? null;
   mode = s.mode === 'operate' ? 'operate' : 'edit';
+  tileWidth = s.tileWidth ?? 96;
+  tileHeight = s.tileHeight ?? 72;
 
   // 旧データ（color 未設定）は種別の既定色を補い、以後は永続化する
   let migrated = false;
@@ -473,6 +482,21 @@ function render() {
     el.master.value = String(masterVolume);
   }
   el.masterVal.textContent = String(Math.round(masterVolume * 100));
+}
+
+/**
+ * 全ボタン共通のタイルサイズを CSS カスタムプロパティで反映する。
+ * タイルは el.buttons の配下なので、ここに設定すれば各タイルへ継承される。
+ * render() でタイルを作り直しても値は保持されるため、サイズ変更では再描画しない
+ * （スライダー操作中の render() はつまみ飛びの原因になるため避ける）。
+ */
+function applyTileSize() {
+  el.buttons.style.setProperty('--tile-w', tileWidth + 'px');
+  el.buttons.style.setProperty('--tile-h', tileHeight + 'px');
+  el.tileW.value = String(tileWidth);
+  el.tileH.value = String(tileHeight);
+  el.tileWVal.textContent = String(tileWidth);
+  el.tileHVal.textContent = String(tileHeight);
 }
 
 /* 開いている全メニュー（ポップオーバー）を閉じる */
@@ -854,6 +878,22 @@ el.master.addEventListener('input', () => {
 });
 el.master.addEventListener('change', () => chrome.storage.local.set({ masterVolume }));
 
+/* タイルサイズ調整（横幅・縦幅）。操作中は CSS 変数と値表示だけを更新し、
+ * タイルの作り直し（render）はしない。確定時（change）にのみ永続化する。 */
+el.tileW.addEventListener('input', () => {
+  tileWidth = Number(el.tileW.value);
+  el.buttons.style.setProperty('--tile-w', tileWidth + 'px');
+  el.tileWVal.textContent = String(tileWidth);
+});
+el.tileW.addEventListener('change', () => chrome.storage.local.set({ tileWidth }));
+
+el.tileH.addEventListener('input', () => {
+  tileHeight = Number(el.tileH.value);
+  el.buttons.style.setProperty('--tile-h', tileHeight + 'px');
+  el.tileHVal.textContent = String(tileHeight);
+});
+el.tileH.addEventListener('change', () => chrome.storage.local.set({ tileHeight }));
+
 el.btnStopAll.addEventListener('click', async () => {
   const res = await toTab({ type: 'STOP_ALL' });
   handleTabResult(res);
@@ -870,6 +910,7 @@ el.btnStopAll.addEventListener('click', async () => {
   await loadState();
   applyMode();
   render();
+  applyTileSize();
   await refreshTabs();
 
   updateOutputStatus();

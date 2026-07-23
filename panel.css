@@ -114,8 +114,9 @@ body {
 
 .bay__title {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 10px;
   font-family: var(--mono);
@@ -329,11 +330,43 @@ body {
 .modes__opt:hover { color: var(--dim); }
 .modes__opt.is-on { background: var(--panel-2); color: var(--text); }
 
+/* ---------- サイズ調整バー（編集モードのみ） ---------- */
+
+.sizer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+body.is-operate .sizer { display: none; }
+
+.sizer__ctl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sizer__label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  color: var(--faint);
+}
+.sizer__range {
+  width: 72px;
+  flex: 0 0 auto;
+}
+.sizer__val {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  width: 30px;
+  text-align: right;
+}
+
 /* ---------- ボタンタイル（cartwall） ---------- */
 
 .buttons {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fill, var(--tile-w, 96px));
   gap: 8px;
   align-content: start;
 }
@@ -345,7 +378,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-height: 72px;
+  height: var(--tile-h, 72px);
   /* 上辺はバッジ（左上）と kebab／再生バッジ（右上）の帯。名前と重ならないよう余白を確保 */
   padding: 20px 10px 12px;
   /* 未再生でもボタンの色を全面に出す。文字色は輝度から自動選択（--tile-ink）。 */

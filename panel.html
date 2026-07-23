@@ -65,6 +65,19 @@
         <button type="button" class="modes__opt" id="modeEdit" aria-pressed="true">編集</button>
         <button type="button" class="modes__opt" id="modeOperate" aria-pressed="false">操作</button>
       </div>
+
+      <div class="sizer" id="sizer" role="group" aria-label="ボタンサイズ調整">
+        <div class="sizer__ctl">
+          <span class="sizer__label">横</span>
+          <input type="range" id="tileW" class="sizer__range" min="72" max="200" step="4" value="96" aria-label="ボタンの横幅" />
+          <output class="sizer__val" id="tileWVal">96</output>
+        </div>
+        <div class="sizer__ctl">
+          <span class="sizer__label">縦</span>
+          <input type="range" id="tileH" class="sizer__range" min="56" max="160" step="4" value="72" aria-label="ボタンの縦幅" />
+          <output class="sizer__val" id="tileHVal">72</output>
+        </div>
+      </div>
     </div>
 
     <div id="buttons" class="buttons"></div>
