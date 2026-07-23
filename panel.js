@@ -38,6 +38,8 @@ let targetTabId = null;
 let playingIds = new Set();
 /* 'edit' … タイル編集可（kebab・追加ドロップを表示） / 'operate' … タップ再生のみ */
 let mode = 'edit';
+/* ドラッグ中のタイルのID（編集モードの並び替え用）。未ドラッグ時は null */
+let draggedId = null;
 
 /* タブ音源（ライブ音声のルーティング）。ストリームは揮発的なので永続化しない。
  * 各要素: { sourceId, tabId, title, volume, connected } */
@@ -401,6 +403,25 @@ function closeAllMenus() {
   }
 }
 
+/* 並び替えのドロップ位置インジケータを消す */
+function clearDropMarks() {
+  for (const t of el.buttons.querySelectorAll('.drag-before, .drag-after')) {
+    t.classList.remove('drag-before', 'drag-after');
+  }
+}
+
+/* sounds 配列内で draggedId のタイルを targetId の前/後へ移動する */
+function moveSound(draggedId, targetId, placeAfter) {
+  if (draggedId === targetId) return;
+  const from = sounds.findIndex((s) => s.id === draggedId);
+  if (from < 0) return;
+  const [item] = sounds.splice(from, 1);
+  let to = sounds.findIndex((s) => s.id === targetId);
+  if (to < 0) { sounds.splice(from, 0, item); return; }
+  if (placeAfter) to += 1;
+  sounds.splice(to, 0, item);
+}
+
 /**
  * cartwall のタイル1枚。タイル全体がタップで再生/停止する再生ボタン。
  * 編集モードでは隅の kebab から表示名/音量/種別/削除を操作するメニューを開く。
@@ -425,6 +446,46 @@ function renderTile(sound) {
   tile.addEventListener('click', trigger);
   tile.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trigger(); }
+  });
+
+  /* 編集モードのみドラッグで並び替え可能にする */
+  tile.draggable = mode === 'edit';
+  tile.addEventListener('dragstart', (e) => {
+    // メニュー内（入力欄など）からのドラッグはタイル移動にしない
+    if (e.target.closest('.tile__menu')) { e.preventDefault(); return; }
+    draggedId = sound.id;
+    tile.classList.add('is-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', sound.id);
+    closeAllMenus();
+  });
+  tile.addEventListener('dragend', () => {
+    tile.classList.remove('is-dragging');
+    draggedId = null;
+    clearDropMarks();
+  });
+  tile.addEventListener('dragover', (e) => {
+    if (draggedId == null || draggedId === sound.id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = tile.getBoundingClientRect();
+    const after = e.clientX > rect.left + rect.width / 2;
+    clearDropMarks();
+    tile.classList.add(after ? 'drag-after' : 'drag-before');
+  });
+  tile.addEventListener('dragleave', () => {
+    tile.classList.remove('drag-before', 'drag-after');
+  });
+  tile.addEventListener('drop', async (e) => {
+    if (draggedId == null || draggedId === sound.id) return;
+    e.preventDefault();
+    const rect = tile.getBoundingClientRect();
+    const after = e.clientX > rect.left + rect.width / 2;
+    const dragged = draggedId;
+    draggedId = null;
+    clearDropMarks();
+    moveSound(dragged, sound.id, after);
+    await persistSounds({ reload: false });
   });
 
   /* 表示名（主体） */
@@ -560,6 +621,7 @@ function setMode(next) {
   mode = next;
   chrome.storage.local.set({ mode });
   applyMode();
+  render(); // タイルの draggable を新モードに合わせて張り替える
 }
 
 /* ---------- 状態ポーリング ---------- */

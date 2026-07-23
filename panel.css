@@ -312,6 +312,13 @@ body {
 /* メニューを開いているタイルは隣接タイルより前面へ */
 .tile:has(.tile__menu.is-open) { z-index: 30; }
 
+/* 編集モード：ドラッグでの並び替え */
+body:not(.is-operate) .tile { cursor: grab; }
+.tile.is-dragging { opacity: .4; cursor: grabbing; }
+/* ドロップ先の挿入位置インジケータ（左＝前 / 右＝後ろ） */
+.tile.drag-before { box-shadow: inset 3px 0 0 0 var(--amber); }
+.tile.drag-after  { box-shadow: inset -3px 0 0 0 var(--amber); }
+
 .tile--se  { border-top-color: var(--amber); }
 .tile--bgm { border-top-color: var(--cool); }
 
