@@ -575,6 +575,14 @@ function renderTile(sound) {
   badge.title = sound.kind === 'bgm' ? 'BGM' : '効果音';
   tile.appendChild(badge);
 
+  /* 再生状態バッジ（▶）。表示/非表示は is-playing クラスに応じて CSS が制御する。 */
+  const state = document.createElement('span');
+  state.className = 'tile__state';
+  state.textContent = '▶';
+  state.title = '再生中';
+  state.setAttribute('aria-label', '再生中');
+  tile.appendChild(state);
+
   /* 表示名（主体） */
   const name = document.createElement('span');
   name.className = 'tile__name';

@@ -346,17 +346,18 @@ body {
   justify-content: center;
   gap: 4px;
   min-height: 72px;
-  /* 上辺はバッジ（左上）と kebab（右上）の帯。名前と重ならないよう余白を確保 */
+  /* 上辺はバッジ（左上）と kebab／再生バッジ（右上）の帯。名前と重ならないよう余白を確保 */
   padding: 20px 10px 12px;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-top: 2px solid var(--rule-2);
+  /* 未再生でもボタンの色を全面に出す。文字色は輝度から自動選択（--tile-ink）。 */
+  background: var(--tile-color, var(--panel));
+  color: var(--tile-ink, var(--text));
+  border: 1px solid var(--tile-color, var(--rule));
   border-radius: 6px;
   text-align: center;
   cursor: pointer;
-  transition: border-color .15s, background .15s, box-shadow .15s, filter .15s;
+  transition: box-shadow .15s, filter .15s;
 }
-.tile:hover { border-color: var(--dim); filter: brightness(1.06); }
+.tile:hover { filter: brightness(1.08); }
 .tile:active { transform: translateY(1px); }
 .tile:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 /* メニューを開いているタイルは隣接タイルより前面へ */
@@ -368,9 +369,6 @@ body:not(.is-operate) .tile { cursor: grab; }
 /* ドロップ先の挿入位置インジケータ（左＝前 / 右＝後ろ） */
 .tile.drag-before { box-shadow: inset 3px 0 0 0 var(--amber); }
 .tile.drag-after  { box-shadow: inset -3px 0 0 0 var(--amber); }
-
-/* 上辺の色はボタンごとの任意色（--tile-color、JS がインラインで設定） */
-.tile { border-top-color: var(--tile-color, var(--rule-2)); }
 
 .tile__name {
   display: -webkit-box;
@@ -387,7 +385,7 @@ body:not(.is-operate) .tile { cursor: grab; }
 .tile__dur {
   font-family: var(--mono);
   font-size: 9.5px;
-  color: var(--faint);
+  color: color-mix(in srgb, var(--tile-ink, var(--faint)) 68%, transparent);
 }
 
 /* 種別バッジ：色ではなく文字で BGM / SE を示す。編集・操作の両モードで常時表示。 */
@@ -401,25 +399,40 @@ body:not(.is-operate) .tile { cursor: grab; }
   font-weight: 700;
   letter-spacing: .06em;
   line-height: 1.4;
-  color: var(--text);
-  background: rgba(0, 0, 0, .34);
+  color: var(--tile-ink, var(--text));
+  background: color-mix(in srgb, var(--tile-ink, #000) 16%, transparent);
   border-radius: 3px;
   pointer-events: none;
 }
-/* 再生中はボタンの色が地色になるため、文字色を地色に合わせる */
-.tile.is-playing .tile__badge {
-  color: var(--tile-ink, var(--rack));
-  background: color-mix(in srgb, var(--tile-ink, var(--rack)) 14%, transparent);
-}
 
-/* 再生中の点灯：タイル全面をボタンの色で灯す。文字色は輝度から自動選択（--tile-ink） */
-.tile.is-playing {
+/* 再生状態バッジ（▶）：再生中のみ CSS で表示。未再生は非表示。
+ * paintLive() の is-playing クラス切替だけで出し入れするため常に DOM に置く。 */
+.tile__state {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  font-size: 8.5px;
+  line-height: 1;
   color: var(--tile-ink, var(--rack));
-  background: var(--tile-color);
-  border-color: var(--tile-color);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--tile-color) 45%, transparent);
+  background: color-mix(in srgb, var(--tile-ink, #000) 20%, transparent);
+  border-radius: 3px;
+  pointer-events: none;
 }
-.tile.is-playing .tile__dur { color: color-mix(in srgb, var(--tile-ink, var(--rack)) 72%, transparent); }
+.tile.is-playing .tile__state { display: flex; }
+/* 編集モードは右上に kebab があるので、再生バッジを左へ寄せて重なりを避ける */
+body:not(.is-operate) .tile__state { right: 26px; }
+
+/* 再生中：発光（グロー）＋明るさで強調。状態は再生バッジ（▶）でも示す。 */
+.tile.is-playing {
+  box-shadow: 0 0 16px color-mix(in srgb, var(--tile-color) 60%, transparent);
+  filter: brightness(1.07);
+}
 
 /* 隅の kebab（編集モードのみ表示） */
 .tile__kebab {
@@ -434,14 +447,15 @@ body:not(.is-operate) .tile { cursor: grab; }
   background: transparent;
   border: 0;
   border-radius: 4px;
-  color: var(--dim);
+  color: color-mix(in srgb, var(--tile-ink, var(--dim)) 72%, transparent);
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
 }
-.tile__kebab:hover { background: rgba(255, 255, 255, .1); color: var(--text); }
-.tile.is-playing .tile__kebab { color: color-mix(in srgb, var(--tile-ink, var(--rack)) 75%, transparent); }
-.tile.is-playing .tile__kebab:hover { background: rgba(0, 0, 0, .12); color: var(--tile-ink, var(--rack)); }
+.tile__kebab:hover {
+  background: color-mix(in srgb, var(--tile-ink, #fff) 15%, transparent);
+  color: var(--tile-ink, var(--text));
+}
 body.is-operate .tile__kebab { display: none; }
 
 /* ---------- タイル編集メニュー（ポップオーバー） ---------- */
