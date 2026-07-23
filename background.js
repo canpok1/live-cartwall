@@ -36,6 +36,10 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
   const { panelWindowId } = await chrome.storage.local.get('panelWindowId');
   if (windowId === panelWindowId) {
     await chrome.storage.local.remove('panelWindowId');
+    // パネルを閉じたら対象タブの再生を全停止する（リモコンが消えたのに音だけ
+    // 鳴り続けるのを防ぐ）。immediate でフェードなし即停止し、タブ音源の
+    // ルーティングも解除する。targetTabId は残すのでパネル再オープンで再接続できる。
+    await sendToTab({ type: 'STOP_ALL', immediate: true });
   }
 });
 
