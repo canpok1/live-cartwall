@@ -1,5 +1,5 @@
 /* =========================================================================
- * Tab Audio Console — service worker
+ * Live Cartwall — service worker
  *  - 操作パネル（別ウィンドウ）の開閉
  *  - パネル → 対象タブ へのメッセージ中継
  *  - 対象タブが遷移したときの content script 再注入

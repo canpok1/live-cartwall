@@ -1,5 +1,5 @@
 /* =========================================================================
- * Tab Audio Console — content script (音声エンジン)
+ * Live Cartwall — content script (音声エンジン)
  *
  * このスクリプトは「画面共有するタブ」の中で動きます。
  * ここで鳴らした音はタブの音声としてMeetの「タブの音声も共有」に乗ります。
@@ -8,8 +8,8 @@
 
 (() => {
   // 多重注入ガード（executeScript が複数回走っても状態を壊さない）
-  if (window.__TAB_AUDIO_CONSOLE__) return;
-  window.__TAB_AUDIO_CONSOLE__ = true;
+  if (window.__LIVE_CARTWALL__) return;
+  window.__LIVE_CARTWALL__ = true;
 
   const AC = window.AudioContext || window.webkitAudioContext;
   const ctx = new AC();
@@ -95,7 +95,7 @@
           const buf = await ctx.decodeAudioData(base64ToArrayBuffer(b64));
           buffers.set(s.id, buf);
         } catch (e) {
-          console.error('[TabAudioConsole] デコード失敗:', s.name, e);
+          console.error('[LiveCartwall] デコード失敗:', s.name, e);
         }
       }
     }
@@ -235,7 +235,7 @@
         video: false
       });
     } catch (e) {
-      console.error('[TabAudioConsole] タブ音源の取得に失敗:', e);
+      console.error('[LiveCartwall] タブ音源の取得に失敗:', e);
       return { ok: false, error: 'CAPTURE_FAILED' };
     }
 
@@ -304,5 +304,5 @@
   // 注入直後に音源を復元（プレゼンモードでURLが変わって再注入されても復帰する）
   loadSounds();
 
-  console.log('[TabAudioConsole] 音声エンジンを注入しました。');
+  console.log('[LiveCartwall] 音声エンジンを注入しました。');
 })();

@@ -17,7 +17,7 @@ jobs:
 
       - name: Create zip
         run: |
-          ZIP_NAME="tab-audio-console-${GITHUB_REF_NAME}.zip"
+          ZIP_NAME="live-cartwall-${GITHUB_REF_NAME}.zip"
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
           zip -r "${ZIP_NAME}" \
             manifest.json \
