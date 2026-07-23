@@ -503,7 +503,43 @@ function applyTileSize() {
 function closeAllMenus() {
   for (const m of el.buttons.querySelectorAll('.tile__menu.is-open')) {
     m.classList.remove('is-open');
+    /* 動的配置で付けたインラインスタイルを次回のために戻す */
+    m.style.left = m.style.top = m.style.right = m.style.maxHeight = '';
   }
+}
+
+/**
+ * ポップオーバーが画面端で見切れないよう、可視領域（スクロール領域）内へ収める。
+ * タイル基準の absolute 配置のため、ビューポート座標で望ましい位置を算出し、
+ * offsetParent（タイル）基準の left/top へ変換して反映する。
+ * @param {HTMLElement} menu is-open 済み（サイズ計測可能な状態）のメニュー
+ * @param {HTMLElement} tile メニューを内包するタイル（position: relative）
+ */
+function placeTileMenu(menu, tile) {
+  const margin = 6;
+  const clip = tile.closest('.bay--grow') || document.documentElement;
+  const cb = clip.getBoundingClientRect();
+
+  /* 領域より高いメニューは領域内でスクロールできるよう上限を設ける */
+  menu.style.maxHeight = Math.max(0, cb.height - margin * 2) + 'px';
+
+  const tr = tile.getBoundingClientRect();
+  const mw = menu.offsetWidth;
+  const mh = menu.offsetHeight;
+
+  /* 横：既定はタイル右端そろえ。右→左の順にクリップ領域内へ収める */
+  let left = tr.right - mw;
+  if (left + mw > cb.right - margin) left = cb.right - margin - mw;
+  if (left < cb.left + margin) left = cb.left + margin;
+
+  /* 縦：既定は kebab の高さ（タイル上端 +26px）。下→上の順に収める */
+  let top = tr.top + 26;
+  if (top + mh > cb.bottom - margin) top = cb.bottom - margin - mh;
+  if (top < cb.top + margin) top = cb.top + margin;
+
+  menu.style.right = 'auto';
+  menu.style.left = (left - tr.left) + 'px';
+  menu.style.top = (top - tr.top) + 'px';
 }
 
 /* 並び替えのドロップ位置インジケータを消す */
@@ -635,6 +671,8 @@ function renderTile(sound) {
     const willOpen = !menu.classList.contains('is-open');
     closeAllMenus();
     menu.classList.toggle('is-open', willOpen);
+    /* 表示後にサイズを計測し、画面端で見切れない位置へ寄せる */
+    if (willOpen) placeTileMenu(menu, tile);
   });
 
   tile.append(kebab, menu);
