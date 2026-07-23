@@ -175,6 +175,89 @@ body {
 .btn--wide { display: block; width: 100%; }
 .btn--ghost { background: transparent; padding: 8px 10px; }
 
+/* ---------- タブ音源 ---------- */
+
+.tsrc { display: flex; flex-direction: column; gap: 6px; }
+.tsrc:not(:empty) { margin-bottom: 8px; }
+
+.tsrc__row {
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+}
+.tsrc__row.is-lost { border-color: #6d2b26; }
+
+.tsrc__top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 7px;
+}
+
+.tsrc__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cool);
+  box-shadow: 0 0 6px rgba(111, 168, 184, .6);
+}
+.tsrc__row.is-lost .tsrc__dot {
+  background: var(--live);
+  box-shadow: 0 0 6px rgba(216, 68, 60, .6);
+}
+
+.tsrc__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.tsrc__x {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--rule-2);
+  border-radius: 3px;
+  color: var(--dim);
+  cursor: pointer;
+}
+.tsrc__x:hover { border-color: var(--live); color: #eb8c86; }
+
+.tsrc__row2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tsrc__lost {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: #eb8c86;
+}
+
+.tsrc__re {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  padding: 4px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--rule-2);
+  border-radius: 3px;
+  color: var(--text);
+  cursor: pointer;
+}
+.tsrc__re:hover { border-color: var(--cool); }
+
 /* ---------- キューカード ---------- */
 
 .cues { display: flex; flex-direction: column; gap: 8px; }
