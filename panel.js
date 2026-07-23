@@ -18,7 +18,9 @@ const el = {
   btnAddSource: $('btnAddSource'),
   tabSources: $('tabSources'),
   sourceNote: $('sourceNote'),
-  cues: $('cues'),
+  modeEdit: $('modeEdit'),
+  modeOperate: $('modeOperate'),
+  buttons: $('buttons'),
   empty: $('empty'),
   drop: $('drop'),
   fileInput: $('fileInput'),
@@ -34,6 +36,8 @@ let sounds = [];
 let masterVolume = 1;
 let targetTabId = null;
 let playingIds = new Set();
+/* 'edit' … タイル編集可（kebab・追加ドロップを表示） / 'operate' … タップ再生のみ */
+let mode = 'edit';
 
 /* タブ音源（ライブ音声のルーティング）。ストリームは揮発的なので永続化しない。
  * 各要素: { sourceId, tabId, title, volume, connected } */
@@ -54,10 +58,11 @@ const PRESET = {
 /* ---------- ストレージ ---------- */
 
 async function loadState() {
-  const s = await chrome.storage.local.get(['sounds', 'masterVolume', 'targetTabId']);
+  const s = await chrome.storage.local.get(['sounds', 'masterVolume', 'targetTabId', 'mode']);
   sounds = s.sounds ?? [];
   masterVolume = s.masterVolume ?? 1;
   targetTabId = s.targetTabId ?? null;
+  mode = s.mode === 'operate' ? 'operate' : 'edit';
 }
 
 async function persistSounds({ reload = true } = {}) {
@@ -376,11 +381,11 @@ function fmtDur(sec) {
 }
 
 function render() {
-  el.cues.innerHTML = '';
+  el.buttons.innerHTML = '';
   el.empty.classList.toggle('is-hidden', sounds.length > 0);
 
   for (const sound of sounds) {
-    el.cues.appendChild(renderCue(sound));
+    el.buttons.appendChild(renderTile(sound));
   }
 
   if (document.activeElement !== el.master) {
@@ -389,54 +394,96 @@ function render() {
   el.masterVal.textContent = String(Math.round(masterVolume * 100));
 }
 
-function renderCue(sound) {
+/* 開いている全メニュー（ポップオーバー）を閉じる */
+function closeAllMenus() {
+  for (const m of el.buttons.querySelectorAll('.tile__menu.is-open')) {
+    m.classList.remove('is-open');
+  }
+}
+
+/**
+ * cartwall のタイル1枚。タイル全体がタップで再生/停止する再生ボタン。
+ * 編集モードでは隅の kebab から表示名/音量/種別/削除を操作するメニューを開く。
+ */
+function renderTile(sound) {
   const isPlaying = playingIds.has(sound.id);
 
-  const card = document.createElement('div');
-  card.className = `cue cue--${sound.kind}${isPlaying ? ' is-playing' : ''}`;
-  card.dataset.id = sound.id;
+  const tile = document.createElement('div');
+  tile.className = `tile tile--${sound.kind}${isPlaying ? ' is-playing' : ''}`;
+  tile.dataset.id = sound.id;
+  tile.tabIndex = 0;
+  tile.setAttribute('role', 'button');
 
-  /* 左レール：種別インジケータ。再生中に灯る */
-  const rail = document.createElement('div');
-  rail.className = 'cue__rail';
-  rail.innerHTML = `<span>${sound.kind === 'bgm' ? 'BED' : 'HIT'}</span>`;
-  card.appendChild(rail);
-
-  const body = document.createElement('div');
-  body.className = 'cue__body';
-
-  /* 1段目：名前 / 長さ / 削除 */
-  const top = document.createElement('div');
-  top.className = 'cue__top';
-
-  const name = document.createElement('span');
-  name.className = 'cue__name';
-  name.textContent = sound.name;
-  name.title = sound.name;
-
-  const dur = document.createElement('span');
-  dur.className = 'cue__dur';
-  dur.textContent = fmtDur(sound.duration);
-
-  const del = document.createElement('button');
-  del.className = 'cue__x';
-  del.type = 'button';
-  del.textContent = '×';
-  del.title = '削除';
-  del.addEventListener('click', async () => {
-    await toTab({ type: 'STOP', id: sound.id });
-    sounds = sounds.filter((s) => s.id !== sound.id);
-    await chrome.storage.local.remove('audio:' + sound.id);
-    await persistSounds();
+  /* タイルタップ：BGM(loop)は再生⇄停止トグル、効果音(overlap)は毎回再生 */
+  const trigger = async () => {
+    if (playingIds.has(sound.id) && sound.loop) {
+      handleTabResult(await toTab({ type: 'STOP', id: sound.id }));
+    } else {
+      handleTabResult(await toTab({ type: 'PLAY', id: sound.id }));
+    }
+  };
+  tile.addEventListener('click', trigger);
+  tile.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trigger(); }
   });
 
-  top.append(name, dur, del);
-  body.appendChild(top);
+  /* 表示名（主体） */
+  const name = document.createElement('span');
+  name.className = 'tile__name';
+  name.textContent = sound.name;
+  name.title = sound.name;
+  tile.appendChild(name);
 
-  /* 2段目：種別 / GO / STOP */
-  const row1 = document.createElement('div');
-  row1.className = 'cue__row';
+  /* 長さ（cartwall らしさ優先で最小限） */
+  const dur = document.createElement('span');
+  dur.className = 'tile__dur';
+  dur.textContent = fmtDur(sound.duration);
+  tile.appendChild(dur);
 
+  /* 隅の kebab（編集モードのみ CSS で表示） */
+  const kebab = document.createElement('button');
+  kebab.className = 'tile__kebab';
+  kebab.type = 'button';
+  kebab.textContent = '⋮';
+  kebab.title = '編集';
+  kebab.setAttribute('aria-label', '編集メニュー');
+
+  const menu = buildTileMenu(sound, name);
+
+  kebab.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = !menu.classList.contains('is-open');
+    closeAllMenus();
+    menu.classList.toggle('is-open', willOpen);
+  });
+
+  tile.append(kebab, menu);
+  return tile;
+}
+
+/** kebab から開くポップオーバー。表示名変更・音量・種別切替・削除を収める。 */
+function buildTileMenu(sound, nameEl) {
+  const menu = document.createElement('div');
+  menu.className = 'tile__menu';
+  /* メニュー内のクリックはタイルタップ（再生）や外側クリック（閉じる）へ波及させない */
+  menu.addEventListener('click', (e) => e.stopPropagation());
+
+  /* 表示名変更 */
+  const rename = document.createElement('input');
+  rename.type = 'text';
+  rename.className = 'tile__rename';
+  rename.value = sound.name;
+  rename.placeholder = '表示名';
+  rename.setAttribute('aria-label', '表示名');
+  rename.addEventListener('input', () => {
+    sound.name = rename.value;
+    nameEl.textContent = sound.name;
+    nameEl.title = sound.name;
+  });
+  rename.addEventListener('change', () => chrome.storage.local.set({ sounds }));
+  menu.appendChild(rename);
+
+  /* 種別切替 */
   const kind = document.createElement('div');
   kind.className = 'kind';
   for (const [key, label] of [['bgm', 'BGM'], ['se', '効果音']]) {
@@ -451,28 +498,11 @@ function renderCue(sound) {
     });
     kind.appendChild(b);
   }
+  menu.appendChild(kind);
 
-  const go = document.createElement('button');
-  go.className = 'go';
-  go.type = 'button';
-  go.textContent = isPlaying && sound.loop ? '再生中' : '再生';
-  go.addEventListener('click', async () => {
-    const res = await toTab({ type: 'PLAY', id: sound.id });
-    handleTabResult(res);
-  });
-
-  const halt = document.createElement('button');
-  halt.className = 'halt';
-  halt.type = 'button';
-  halt.textContent = '停止';
-  halt.addEventListener('click', () => toTab({ type: 'STOP', id: sound.id }));
-
-  row1.append(kind, go, halt);
-  body.appendChild(row1);
-
-  /* 3段目：音量 */
-  const row2 = document.createElement('div');
-  row2.className = 'cue__row';
+  /* 音量 */
+  const vol = document.createElement('div');
+  vol.className = 'tile__menurow';
 
   const tag = document.createElement('span');
   tag.className = 'lvl__tag';
@@ -495,11 +525,41 @@ function renderCue(sound) {
   });
   lvl.addEventListener('change', () => chrome.storage.local.set({ sounds }));
 
-  row2.append(tag, lvl, num);
-  body.appendChild(row2);
+  vol.append(tag, lvl, num);
+  menu.appendChild(vol);
 
-  card.appendChild(body);
-  return card;
+  /* 削除 */
+  const del = document.createElement('button');
+  del.className = 'tile__del';
+  del.type = 'button';
+  del.textContent = 'このボタンを削除';
+  del.addEventListener('click', async () => {
+    await toTab({ type: 'STOP', id: sound.id });
+    sounds = sounds.filter((s) => s.id !== sound.id);
+    await chrome.storage.local.remove('audio:' + sound.id);
+    await persistSounds();
+  });
+  menu.appendChild(del);
+
+  return menu;
+}
+
+/* ---------- モード切替 ---------- */
+
+function applyMode() {
+  document.body.classList.toggle('is-operate', mode === 'operate');
+  el.modeEdit.classList.toggle('is-on', mode === 'edit');
+  el.modeOperate.classList.toggle('is-on', mode === 'operate');
+  el.modeEdit.setAttribute('aria-pressed', String(mode === 'edit'));
+  el.modeOperate.setAttribute('aria-pressed', String(mode === 'operate'));
+  closeAllMenus();
+}
+
+function setMode(next) {
+  if (mode === next) return;
+  mode = next;
+  chrome.storage.local.set({ mode });
+  applyMode();
 }
 
 /* ---------- 状態ポーリング ---------- */
@@ -536,15 +596,11 @@ function setRail(state, label) {
  * つまみが飛んでしまうため、クラスの付け外しに留める。
  */
 function paintLive() {
-  for (const card of el.cues.children) {
-    const sound = sounds.find((s) => s.id === card.dataset.id);
+  for (const tile of el.buttons.children) {
+    const sound = sounds.find((s) => s.id === tile.dataset.id);
     if (!sound) continue;
 
-    const isPlaying = playingIds.has(sound.id);
-    card.classList.toggle('is-playing', isPlaying);
-
-    const go = card.querySelector('.go');
-    if (go) go.textContent = isPlaying && sound.loop ? '再生中' : '再生';
+    tile.classList.toggle('is-playing', playingIds.has(sound.id));
   }
 }
 
@@ -558,6 +614,15 @@ async function poll() {
 }
 
 /* ---------- イベント配線 ---------- */
+
+el.modeEdit.addEventListener('click', () => setMode('edit'));
+el.modeOperate.addEventListener('click', () => setMode('operate'));
+
+/* メニュー外をクリックしたら開いているポップオーバーを閉じる */
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.tile__menu') || e.target.closest('.tile__kebab')) return;
+  closeAllMenus();
+});
 
 el.btnRefresh.addEventListener('click', refreshTabs);
 el.btnConnect.addEventListener('click', connect);
@@ -604,6 +669,7 @@ el.btnStopAll.addEventListener('click', async () => {
 
 (async function init() {
   await loadState();
+  applyMode();
   render();
   await refreshTabs();
 

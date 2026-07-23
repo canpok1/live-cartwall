@@ -258,77 +258,170 @@ body {
 }
 .tsrc__re:hover { border-color: var(--cool); }
 
-/* ---------- キューカード ---------- */
+/* ---------- モード切替 ---------- */
 
-.cues { display: flex; flex-direction: column; gap: 8px; }
-
-.cue {
-  display: grid;
-  grid-template-columns: 34px 1fr;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: 5px;
+.modes {
+  display: flex;
+  border: 1px solid var(--rule-2);
+  border-radius: 4px;
   overflow: hidden;
 }
+.modes__opt {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  padding: 5px 14px;
+  background: transparent;
+  border: 0;
+  color: var(--faint);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.modes__opt:hover { color: var(--dim); }
+.modes__opt.is-on { background: var(--panel-2); color: var(--text); }
 
-/* 左のキューレール：種別インジケータ。再生中に灯る */
-.cue__rail {
+/* ---------- ボタンタイル（cartwall） ---------- */
+
+.buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  align-content: start;
+}
+
+.tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  background: #1b1610;
-  border-right: 1px solid var(--rule);
-  font-family: var(--mono);
+  gap: 4px;
+  min-height: 72px;
+  padding: 12px 10px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--rule-2);
+  border-radius: 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, box-shadow .15s, filter .15s;
+}
+.tile:hover { border-color: var(--dim); filter: brightness(1.06); }
+.tile:active { transform: translateY(1px); }
+.tile:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+/* メニューを開いているタイルは隣接タイルより前面へ */
+.tile:has(.tile__menu.is-open) { z-index: 30; }
+
+.tile--se  { border-top-color: var(--amber); }
+.tile--bgm { border-top-color: var(--cool); }
+
+.tile__name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  max-width: 100%;
+  overflow: hidden;
   font-size: 12px;
   font-weight: 600;
-  color: var(--faint);
-  transition: background .15s, color .15s;
+  line-height: 1.25;
+  word-break: break-word;
 }
 
-.cue__body { padding: 9px 11px; min-width: 0; }
+.tile__dur {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--faint);
+}
 
-.cue__top {
+/* 再生中の点灯：タイル全面を種別色で灯す */
+.tile.is-playing { color: var(--rack); }
+.tile--se.is-playing {
+  background: var(--amber);
+  border-color: var(--amber);
+  box-shadow: 0 0 14px rgba(232, 163, 61, .45);
+}
+.tile--bgm.is-playing {
+  background: var(--cool);
+  border-color: var(--cool);
+  box-shadow: 0 0 14px rgba(111, 168, 184, .45);
+}
+.tile.is-playing .tile__dur { color: rgba(23, 19, 15, .7); }
+
+/* 隅の kebab（編集モードのみ表示） */
+.tile__kebab {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tile__kebab:hover { background: rgba(255, 255, 255, .1); color: var(--text); }
+.tile.is-playing .tile__kebab { color: rgba(23, 19, 15, .75); }
+.tile.is-playing .tile__kebab:hover { background: rgba(0, 0, 0, .12); color: var(--rack); }
+body.is-operate .tile__kebab { display: none; }
+
+/* ---------- タイル編集メニュー（ポップオーバー） ---------- */
+
+.tile__menu {
+  position: absolute;
+  top: 26px;
+  right: 4px;
+  z-index: 20;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  width: 190px;
+  padding: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--rule-2);
+  border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .55);
+  color: var(--text);
+  text-align: left;
+  cursor: default;
+}
+.tile__menu.is-open { display: flex; }
+
+.tile__rename {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--rule-2);
+  border-radius: 4px;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+.tile__rename:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+
+.tile__menurow {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
 }
 
-.cue__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12.5px;
-  font-weight: 500;
-}
-
-.cue__dur {
+.tile__del {
   font-family: var(--mono);
   font-size: 10px;
-  color: var(--faint);
-}
-
-.cue__x {
-  background: none;
-  border: 0;
-  color: var(--faint);
+  letter-spacing: .06em;
+  padding: 6px 8px;
+  background: transparent;
+  border: 1px solid var(--rule-2);
+  border-radius: 4px;
+  color: var(--dim);
   cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  padding: 2px 4px;
 }
-.cue__x:hover { color: var(--live); }
-
-.cue__row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.cue__row + .cue__row { margin-top: 7px; }
+.tile__del:hover { border-color: var(--live); color: #eb8c86; }
 
 /* 種別トグル */
 .kind {
@@ -338,6 +431,7 @@ body {
   overflow: hidden;
 }
 .kind__opt {
+  flex: 1;
   font-family: var(--mono);
   font-size: 9.5px;
   letter-spacing: .08em;
@@ -349,39 +443,8 @@ body {
 }
 .kind__opt.is-on { color: var(--rack); font-weight: 700; }
 
-.cue--se  .kind__opt.is-on { background: var(--amber); }
-.cue--bgm .kind__opt.is-on { background: var(--cool); }
-
-/* GO / STOP */
-.go {
-  flex: 1;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .14em;
-  padding: 7px;
-  border: 0;
-  border-radius: 3px;
-  color: var(--rack);
-  cursor: pointer;
-}
-.cue--se  .go { background: var(--amber); }
-.cue--bgm .go { background: var(--cool); }
-.go:hover { filter: brightness(1.12); }
-.go:active { transform: translateY(1px); }
-
-.halt {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: .1em;
-  padding: 7px 10px;
-  background: transparent;
-  border: 1px solid var(--rule-2);
-  border-radius: 3px;
-  color: var(--dim);
-  cursor: pointer;
-}
-.halt:hover { border-color: var(--live); color: #eb8c86; }
+.tile--se  .kind__opt.is-on { background: var(--amber); }
+.tile--bgm .kind__opt.is-on { background: var(--cool); }
 
 /* 音量 */
 .lvl { flex: 1; }
@@ -399,12 +462,6 @@ body {
   color: var(--faint);
   width: 30px;
 }
-
-/* 再生中の点灯 */
-.cue.is-playing { border-color: var(--rule-2); }
-.cue.is-playing .cue__rail { color: var(--rack); }
-.cue--se.is-playing  .cue__rail { background: var(--amber); }
-.cue--bgm.is-playing .cue__rail { background: var(--cool); }
 
 /* ---------- 空状態 ---------- */
 
@@ -447,6 +504,9 @@ body {
   color: var(--text);
 }
 .drop__sub { font-size: 10px; color: var(--faint); }
+
+/* 操作モードでは音源追加のドロップ領域を隠す */
+body.is-operate .drop { display: none; }
 
 /* ---------- マスター & 全停止 ---------- */
 
@@ -533,8 +593,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 input[type="range"]:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
 
-.cue--se  input[type="range"]::-webkit-slider-thumb { background: var(--amber); }
-.cue--bgm input[type="range"]::-webkit-slider-thumb { background: var(--cool); }
+.tile--se  input[type="range"]::-webkit-slider-thumb { background: var(--amber); }
+.tile--bgm input[type="range"]::-webkit-slider-thumb { background: var(--cool); }
 
 /* ---------- スクロールバー ---------- */
 
