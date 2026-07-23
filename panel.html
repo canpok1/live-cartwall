@@ -15,36 +15,48 @@
   </header>
 
   <!-- ===== 接続先タブ ===== -->
-  <section class="bay">
-    <h2 class="bay__title">出力先タブ</h2>
+  <details class="bay bay--fold" id="bayOutput">
+    <summary class="fold__head">
+      <span class="fold__title">出力先タブ</span>
+      <span class="fold__status is-off" id="outputStatus">未接続</span>
+      <span class="fold__chev" aria-hidden="true">▸</span>
+    </summary>
 
-    <div class="patch">
-      <select id="tabSelect" class="patch__select" aria-label="画面共有するタブ"></select>
-      <button id="btnRefresh" class="btn btn--ghost" type="button" title="タブ一覧を更新">↻</button>
+    <div class="fold__body">
+      <div class="patch">
+        <select id="tabSelect" class="patch__select" aria-label="画面共有するタブ"></select>
+        <button id="btnRefresh" class="btn btn--ghost" type="button" title="タブ一覧を更新">↻</button>
+      </div>
+
+      <button id="btnConnect" class="btn btn--wide" type="button">このタブに接続</button>
+
+      <p class="note" id="connNote">
+        画面共有するスライドのタブを選んで接続します。音はこのタブの中で鳴ります。
+      </p>
     </div>
-
-    <button id="btnConnect" class="btn btn--wide" type="button">このタブに接続</button>
-
-    <p class="note" id="connNote">
-      画面共有するスライドのタブを選んで接続します。音はこのタブの中で鳴ります。
-    </p>
-  </section>
+  </details>
 
   <!-- ===== タブ音源 ===== -->
-  <section class="bay">
-    <h2 class="bay__title">タブ音源</h2>
+  <details class="bay bay--fold" id="baySource">
+    <summary class="fold__head">
+      <span class="fold__title">タブ音源</span>
+      <span class="fold__status is-off" id="sourceStatus">なし</span>
+      <span class="fold__chev" aria-hidden="true">▸</span>
+    </summary>
 
-    <div class="patch">
-      <select id="sourceSelect" class="patch__select" aria-label="取り込むタブ"></select>
-      <button id="btnAddSource" class="btn btn--ghost" type="button" title="このタブの音声を取り込む">追加</button>
+    <div class="fold__body">
+      <div class="patch">
+        <select id="sourceSelect" class="patch__select" aria-label="取り込むタブ"></select>
+        <button id="btnAddSource" class="btn btn--ghost" type="button" title="このタブの音声を取り込む">追加</button>
+      </div>
+
+      <div id="tabSources" class="tsrc"></div>
+
+      <p class="note" id="sourceNote">
+        他タブで再生中の音声（YouTube・配信・音楽サービス等）を出力先タブに合流させます。再生・停止はそのタブ側で操作し、ここでは音量のみ調整します。
+      </p>
     </div>
-
-    <div id="tabSources" class="tsrc"></div>
-
-    <p class="note" id="sourceNote">
-      他タブで再生中の音声（YouTube・配信・音楽サービス等）を出力先タブに合流させます。再生・停止はそのタブ側で操作し、ここでは音量のみ調整します。
-    </p>
-  </section>
+  </details>
 
   <!-- ===== ボタンエリア ===== -->
   <section class="bay bay--grow">
