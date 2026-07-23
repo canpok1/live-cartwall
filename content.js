@@ -43,7 +43,11 @@
   const pendingPlays = new Set();
 
   const unlock = () => {
-    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    if (ctx.state === 'running') return;
+    // wheel など一部イベントは「ユーザー操作」として扱われない。アクティベーションが
+    // 無いまま resume() すると警告が出るため、その時は呼ばない（次の操作に委ねる）。
+    if (navigator.userActivation && !navigator.userActivation.isActive) return;
+    ctx.resume().catch(() => {});
   };
   for (const ev of ['pointerdown', 'keydown', 'touchstart', 'wheel']) {
     window.addEventListener(ev, unlock, { capture: true, passive: true });
