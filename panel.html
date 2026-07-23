@@ -46,13 +46,16 @@
     </p>
   </section>
 
-  <!-- ===== キュー一覧 ===== -->
+  <!-- ===== ボタンエリア ===== -->
   <section class="bay bay--grow">
-    <h2 class="bay__title">
-      キュー
-    </h2>
+    <div class="bay__title">
+      <div class="modes" role="group" aria-label="モード切替">
+        <button type="button" class="modes__opt" id="modeEdit" aria-pressed="true">編集</button>
+        <button type="button" class="modes__opt" id="modeOperate" aria-pressed="false">操作</button>
+      </div>
+    </div>
 
-    <div id="cues" class="cues"></div>
+    <div id="buttons" class="buttons"></div>
 
     <div id="empty" class="empty">
       <p class="empty__head">音源がまだありません</p>
