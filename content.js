@@ -30,16 +30,36 @@
   /* ---------------------------------------------------------------------
    * 自動再生ポリシー対策
    * タブ内で一度もユーザー操作がないと AudioContext は suspended のまま。
-   * ページ上のクリック/キー操作を拾って resume する。
+   * ページ上のクリック/キー操作（＝ユーザー操作）を拾って resume する。
    * Googleスライドは矢印キーでめくるので、進行中は自然に解除される。
+   *
+   * 重要：resume()/start() を suspended のまま呼ぶと、たとえ Promise を
+   * catch してもブラウザが「AudioContext was not allowed to start」警告を
+   * コンソールに出す（JS では握りつぶせない）。そこで resume は必ず
+   * ユーザー操作ハンドラの中だけで行い、未解除中に来た再生要求は捨てずに
+   * pendingPlays へ積んでおき、解除された瞬間（onstatechange）に流す。
    * ------------------------------------------------------------------- */
+  /** @type {Set<string>} suspended中に要求され、解除後に再生する音のID */
+  const pendingPlays = new Set();
+
   const unlock = () => {
-    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    if (ctx.state === 'running') return;
+    // wheel など一部イベントは「ユーザー操作」として扱われない。アクティベーションが
+    // 無いまま resume() すると警告が出るため、その時は呼ばない（次の操作に委ねる）。
+    if (navigator.userActivation && !navigator.userActivation.isActive) return;
+    ctx.resume().catch(() => {});
   };
   for (const ev of ['pointerdown', 'keydown', 'touchstart', 'wheel']) {
     window.addEventListener(ev, unlock, { capture: true, passive: true });
   }
-  document.addEventListener('visibilitychange', unlock);
+
+  // ユーザー操作で running になったら、保留していた再生要求をまとめて流す。
+  ctx.onstatechange = () => {
+    if (ctx.state !== 'running' || pendingPlays.size === 0) return;
+    const ids = [...pendingPlays];
+    pendingPlays.clear();
+    for (const id of ids) play(id);
+  };
 
   /* --------------------------------------------------------------------- */
 
@@ -119,7 +139,14 @@
     if (!buf) return { ok: false, error: 'NOT_LOADED' };
 
     const m = meta.get(id) || {};
-    unlock();
+
+    // 未解除（suspended）なら start() で自動再生ポリシー警告が出る。ここでは
+    // 鳴らさず保留し、タブ操作で解除された時に onstatechange が流す。
+    // パネルには suspended を返し「タブを一度クリック」を促す。
+    if (ctx.state !== 'running') {
+      pendingPlays.add(id);
+      return status();
+    }
 
     // 重ねがけを許可しない音（BGM等）は、先に鳴っている同じ音を止める
     if (!m.overlap) stop(id, 0.06);
@@ -153,6 +180,7 @@
   }
 
   function stop(id, fadeOverride) {
+    pendingPlays.delete(id); // 未解除で保留中の再生要求も取り消す
     const set = active.get(id);
     if (!set || set.size === 0) return status();
 
@@ -178,6 +206,7 @@
   }
 
   function stopAll(immediate) {
+    pendingPlays.clear(); // 保留中の再生要求も破棄する
     for (const id of [...active.keys()]) stop(id, immediate ? 0 : undefined);
     // タブ音源も出力から外す（ソースタブ自体はタブ側で鳴り続ける）
     removeAllTabSources();
@@ -239,8 +268,8 @@
       return { ok: false, error: 'CAPTURE_FAILED' };
     }
 
-    unlock();
-
+    // ライブ音声は running になれば流れる。suspended のまま resume() すると
+    // 警告が出るため、ここでは resume しない（タブ操作での解除に委ねる）。
     const srcNode = ctx.createMediaStreamSource(stream);
     const gain = ctx.createGain();
     gain.gain.value = Math.max(0.0001, volume ?? 1);
