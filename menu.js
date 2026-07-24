@@ -60,17 +60,10 @@ function render() {
   const hasAudio = sources.length > 0 || soundCount > 0;
 
   // --- 再生タブ section ---
-  const outStatus = $('outStatus');
-  outStatus.textContent = connected ? (targetTabTitle ? `接続中 · ${targetTabTitle}` : '接続中') : '未接続';
-  outStatus.className = `menu__status ${connected ? 'is-on' : 'is-off'}`;
-
-  // 再生タブは同時に1つ。設定中は「切断」しか出さない（別タブへ設定し直すには
-  // 必ず切断を挟ませる）。未接続のときだけ「再生タブにする」。
-  const btnSet = $('btnSetOutput');
-  const btnDisc = $('btnDisconnect');
-  btnSet.classList.toggle('is-hidden', connected);
-  btnDisc.classList.toggle('is-hidden', !connected);
-  btnSet.disabled = !(cur && isCapturable(cur.url));
+  // 再生タブは同時に1つ。設定後は不要になるため接続中はセクションごと隠す
+  //（切断は操作パネルで行う）。未接続のときだけ「再生タブにする」を出す。
+  $('secOutput').classList.toggle('is-hidden', connected);
+  $('btnSetOutput').disabled = !(cur && isCapturable(cur.url));
 
   // --- 音源タブ section（取り込み） ---
   const srcStatus = $('srcStatus');
@@ -135,13 +128,6 @@ $('btnSetOutput').addEventListener('click', async () => {
     ? 'このタブを再生タブにしました。'
     : 'このタブには接続できません（Chromeの設定ページやストアなど）。',
     res?.ok ? 'is-good' : 'is-bad');
-});
-
-$('btnDisconnect').addEventListener('click', async () => {
-  await chrome.runtime.sendMessage({ type: 'DISCONNECT' });
-  await loadState();
-  render();
-  setNote('再生タブを切断しました。', '');
 });
 
 $('btnAddSource').addEventListener('click', async () => {

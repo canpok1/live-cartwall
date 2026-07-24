@@ -96,6 +96,47 @@ body {
 }
 .rail__btn:hover { color: var(--text); border-color: var(--dim); }
 
+/* ---------- 再生タブ バー ---------- */
+
+.outbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--rule);
+}
+.outbar__label {
+  flex: 0 0 auto;
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: var(--faint);
+}
+.outbar__tab {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--cool);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.outbar.is-off .outbar__tab { color: var(--faint); font-weight: 400; }
+.outbar__x {
+  flex: 0 0 auto;
+  font-size: 10px;
+  letter-spacing: .06em;
+  color: var(--dim);
+  background: transparent;
+  border: 1px solid var(--rule-2);
+  border-radius: 3px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.outbar__x:hover { color: #eb8c86; border-color: var(--live); }
+
 /* ---------- ベイ（区画） ---------- */
 
 .bay {

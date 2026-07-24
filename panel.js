@@ -10,6 +10,9 @@ const el = {
   rail: $('rail'),
   railLabel: $('railLabel'),
   btnReload: $('btnReload'),
+  outbar: $('outbar'),
+  outTab: $('outTab'),
+  btnDisconnect: $('btnDisconnect'),
   libNote: $('libNote'),
   tabSources: $('tabSources'),
   sourceNote: $('sourceNote'),
@@ -142,6 +145,24 @@ function toTab(payload) {
 function setNote(text, cls) {
   el.libNote.textContent = text;
   el.libNote.className = `note ${cls}`.trim();
+}
+
+/* 再生タブの接続状態バー。接続中はタブ名と切断ボタンを出す。 */
+function updateOutbar() {
+  const connected = targetTabId != null;
+  el.outTab.textContent = connected ? (targetTabTitle || '接続中') : '未設定';
+  el.outbar.classList.toggle('is-off', !connected);
+  el.btnDisconnect.classList.toggle('is-hidden', !connected);
+}
+
+/* 再生タブを切断する（設定・再設定はアイコンメニューから）。 */
+async function disconnectOutput() {
+  await chrome.runtime.sendMessage({ type: 'DISCONNECT' });
+  // storage.onChanged で targetTabId/tabSources の解除が反映される
+  targetTabId = null;
+  targetTabTitle = '';
+  updateOutbar();
+  setRail('warn', '再生タブが未設定');
 }
 
 /* ---------- タブ音源（一覧・管理） ---------- */
@@ -800,6 +821,8 @@ el.btnReload.addEventListener('click', async () => {
   handleTabResult(res);
 });
 
+el.btnDisconnect.addEventListener('click', disconnectOutput);
+
 el.fileInput.addEventListener('change', async (e) => {
   await addFiles(e.target.files);
   e.target.value = '';
@@ -855,6 +878,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if ('targetTabId' in changes) targetTabId = changes.targetTabId.newValue ?? null;
   if ('targetTabTitle' in changes) targetTabTitle = changes.targetTabTitle.newValue ?? '';
+  if ('targetTabId' in changes || 'targetTabTitle' in changes) updateOutbar();
   if ('tabSources' in changes) {
     tabSources = Array.isArray(changes.tabSources.newValue) ? changes.tabSources.newValue : [];
     renderTabSources();
@@ -871,6 +895,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   applyTileSize();
   renderTabSources();
   updateSourceStatus();
+  updateOutbar();
 
   poll();
   setInterval(poll, 1000);

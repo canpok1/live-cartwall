@@ -14,6 +14,13 @@
     <button class="rail__btn" id="btnReload" type="button" title="音源を読み直す">再読込</button>
   </header>
 
+  <!-- ===== 再生タブ（接続状態と切断） ===== -->
+  <div class="outbar" id="outbar">
+    <span class="outbar__label">再生タブ</span>
+    <span class="outbar__tab" id="outTab">未設定</span>
+    <button class="outbar__x is-hidden" id="btnDisconnect" type="button" title="再生タブを切断">切断</button>
+  </div>
+
   <!-- ===== 音源タブ（一覧・管理） ===== -->
   <details class="bay bay--fold" id="baySource">
     <summary class="fold__head">
