@@ -146,41 +146,64 @@ function tabHost(url) {
   try { return new URL(url).hostname; } catch { return ''; }
 }
 
+/* 各通常ウィンドウの「現在のタブ」（active）を先頭へ集約する。
+ * active は windowId 昇順で前に、それ以外は元の並びを保つ。 */
+function currentFirst(list) {
+  const active = list.filter((t) => t.active).sort((a, b) => a.windowId - b.windowId);
+  const rest = list.filter((t) => !t.active);
+  return [...active, ...rest];
+}
+
+/* option のラベル。アクティブタブには「現在のタブ」マークを付ける。
+ * 通常ウィンドウが複数あるときだけ、どのウィンドウかを番号で区別する。 */
+function tabOptionLabel(t, seqOf, multiWindow) {
+  const base = `${t.title.slice(0, 46)} — ${tabHost(t.url)}`;
+  if (!t.active) return base;
+  return multiWindow ? `【現在のタブ・ウィンドウ${seqOf(t.windowId)}】 ${base}` : `【現在のタブ】 ${base}`;
+}
+
+/* タブ一覧を <select> へ反映する。アクティブタブを先頭に集約して強調ラベルを付ける。
+ * selectedId が一覧にあればそれを選択状態にする。空なら disabled のメッセージを出す。
+ * ウィンドウ番号の採番はこの select に残ったアクティブタブ単位で行う。 */
+function fillTabSelect(selectEl, list, { emptyText, selectedId }) {
+  selectEl.innerHTML = '';
+
+  if (list.length === 0) {
+    const opt = document.createElement('option');
+    opt.textContent = emptyText;
+    opt.disabled = true;
+    selectEl.appendChild(opt);
+    return;
+  }
+
+  const activeWinIds = [...new Set(list.filter((t) => t.active).map((t) => t.windowId))].sort((a, b) => a - b);
+  const multiWindow = activeWinIds.length >= 2;
+  const seqOf = (winId) => activeWinIds.indexOf(winId) + 1;
+
+  for (const t of currentFirst(list)) {
+    const opt = document.createElement('option');
+    opt.value = String(t.id);
+    opt.textContent = tabOptionLabel(t, seqOf, multiWindow);
+    if (selectedId != null && t.id === selectedId) opt.selected = true;
+    selectEl.appendChild(opt);
+  }
+}
+
 async function refreshTabs() {
   const res = await chrome.runtime.sendMessage({ type: 'LIST_TABS' });
   if (!res?.ok) return;
 
-  el.tabSelect.innerHTML = '';
-  for (const t of res.tabs) {
-    const opt = document.createElement('option');
-    opt.value = String(t.id);
-    opt.textContent = `${t.title.slice(0, 46)} — ${tabHost(t.url)}`;
-    if (t.id === targetTabId) opt.selected = true;
-    el.tabSelect.appendChild(opt);
-  }
-
-  if (res.tabs.length === 0) {
-    const opt = document.createElement('option');
-    opt.textContent = '(開いているタブがありません)';
-    opt.disabled = true;
-    el.tabSelect.appendChild(opt);
-  }
+  fillTabSelect(el.tabSelect, res.tabs, {
+    emptyText: '(開いているタブがありません)',
+    selectedId: targetTabId
+  });
 
   // ソース候補（出力先タブは自己キャプチャ防止のため除外）
   availableTabs = res.tabs.filter((t) => t.id !== targetTabId);
-  el.sourceSelect.innerHTML = '';
-  for (const t of availableTabs) {
-    const opt = document.createElement('option');
-    opt.value = String(t.id);
-    opt.textContent = `${t.title.slice(0, 46)} — ${tabHost(t.url)}`;
-    el.sourceSelect.appendChild(opt);
-  }
-  if (availableTabs.length === 0) {
-    const opt = document.createElement('option');
-    opt.textContent = '(取り込めるタブがありません)';
-    opt.disabled = true;
-    el.sourceSelect.appendChild(opt);
-  }
+  fillTabSelect(el.sourceSelect, availableTabs, {
+    emptyText: '(取り込めるタブがありません)',
+    selectedId: null
+  });
 }
 
 async function connect() {
