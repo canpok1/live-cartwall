@@ -96,6 +96,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg?.type === 'LIST_TABS') {
         const tabs = await chrome.tabs.query({});
         const extUrl = chrome.runtime.getURL('');
+        // 通常ウィンドウ（type: 'normal'）のIDだけを集める。パネルや他拡張の
+        // popup ウィンドウを「現在のタブ」の判定対象から除くため。
+        const wins = await chrome.windows.getAll();
+        const normalWinIds = new Set(wins.filter((w) => w.type === 'normal').map((w) => w.id));
         sendResponse({
           ok: true,
           tabs: tabs
@@ -105,7 +109,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               title: t.title || '(無題)',
               url: t.url,
               favIconUrl: t.favIconUrl,
-              audible: t.audible
+              audible: t.audible,
+              windowId: t.windowId,
+              // 通常ウィンドウのアクティブタブのみ true（popup は除外）
+              active: Boolean(t.active) && normalWinIds.has(t.windowId)
             }))
         });
         return;
