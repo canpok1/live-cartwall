@@ -15,7 +15,6 @@ const el = {
   btnDisconnect: $('btnDisconnect'),
   libNote: $('libNote'),
   tabSources: $('tabSources'),
-  sourceNote: $('sourceNote'),
   baySource: $('baySource'),
   sourceStatus: $('sourceStatus'),
   modeEdit: $('modeEdit'),
