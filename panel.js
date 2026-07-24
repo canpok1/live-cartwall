@@ -308,6 +308,17 @@ function setSourceNote(text, cls) {
   el.sourceNote.className = `note ${cls}`.trim();
 }
 
+/**
+ * ユーザー向けの文言に、background/content から返る実際のエラー内容を
+ * 「（詳細: …）」として付け足す。原因調査できるよう真のエラーを握りつぶさない。
+ * NO_TAB / SELF_CAPTURE のように専用文言で説明済みのコードは重複するので付けない。
+ */
+function withErrorDetail(text, res) {
+  const err = res?.error;
+  if (!err || err === 'NO_TAB' || err === 'SELF_CAPTURE') return text;
+  return `${text}（詳細: ${err}）`;
+}
+
 /* 折りたたみ見出しの要約（タブ音源の件数・状態）を更新する */
 function updateSourceStatus() {
   const n = tabSources.length;
@@ -345,7 +356,7 @@ async function addSource() {
   if (!res?.ok) {
     setSourceNote(res?.error === 'NO_TAB'
       ? '出力先タブが未設定です。先に接続してください。'
-      : 'このタブは取り込めませんでした。', 'is-bad');
+      : withErrorDetail('このタブは取り込めませんでした。', res), 'is-bad');
     return;
   }
 
@@ -353,7 +364,7 @@ async function addSource() {
   const volume = 0.8;
   const add = await toTab({ type: 'ADD_TAB_SOURCE', sourceId, streamId: res.streamId, volume });
   if (!add?.ok) {
-    setSourceNote('音声の取り込みに失敗しました。もう一度お試しください。', 'is-bad');
+    setSourceNote(withErrorDetail('音声の取り込みに失敗しました。もう一度お試しください。', add), 'is-bad');
     return;
   }
 
@@ -372,12 +383,12 @@ async function reconnectSource(src) {
   setSourceNote('再接続しています…', '');
   const res = await chrome.runtime.sendMessage({ type: 'GET_STREAM_ID', sourceTabId: src.tabId });
   if (!res?.ok) {
-    setSourceNote('タブが見つかりません。閉じられた可能性があります。', 'is-bad');
+    setSourceNote(withErrorDetail('タブが見つかりません。閉じられた可能性があります。', res), 'is-bad');
     return;
   }
   const add = await toTab({ type: 'ADD_TAB_SOURCE', sourceId: src.sourceId, streamId: res.streamId, volume: src.volume });
   if (!add?.ok) {
-    setSourceNote('再接続に失敗しました。', 'is-bad');
+    setSourceNote(withErrorDetail('再接続に失敗しました。', add), 'is-bad');
     return;
   }
   src.connected = true;
