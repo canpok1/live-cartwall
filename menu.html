@@ -12,30 +12,16 @@
     <span class="menu__brand">Live Cartwall</span>
   </header>
 
-  <!-- 案内：状態に応じて「次にやること」を1つ示す -->
-  <div class="menu__step" id="step">
-    <span class="menu__stepmsg" id="stepMsg">まずは音声を再生する場所を決めましょう</span>
-  </div>
+  <!-- 各ステップを「見出し → 説明文 → ボタン」の縦流れで表示する。
+       内容は状態に応じて menu.js が出し分ける。 -->
+  <h2 class="menu__title" id="stepMsg">まずは音声を再生する場所を決めましょう</h2>
+  <p class="menu__desc" id="desc"></p>
 
-  <!-- 再生タブ（出力先）。設定後は不要なので接続中は非表示（切断は操作パネルで） -->
-  <section class="menu__sec" id="secOutput">
+  <div class="menu__actions">
     <button class="mbtn" id="btnSetOutput" type="button">このタブを再生タブにする</button>
-  </section>
-
-  <!-- 音源タブ（取り込み） -->
-  <section class="menu__sec is-hidden" id="secSource">
-    <div class="menu__sectop">
-      <span class="menu__sectitle">音源タブ</span>
-      <span class="menu__status is-off" id="srcStatus">なし</span>
-    </div>
-    <button class="mbtn" id="btnAddSource" type="button" disabled>このタブの音声を取り込む</button>
-    <p class="menu__note" id="note"></p>
-  </section>
-
-  <!-- 操作パネル（音源追加 / 再生） -->
-  <footer class="menu__foot is-hidden" id="secPanel">
-    <button class="mbtn mbtn--wide" id="btnOpenPanel" type="button">操作パネルを開く</button>
-  </footer>
+    <button class="mbtn is-hidden" id="btnAddSource" type="button" disabled>このタブの音声を取り込む</button>
+    <button class="mbtn is-hidden" id="btnOpenPanel" type="button">操作パネルを開く</button>
+  </div>
 
   <script src="menu.js"></script>
 </body>

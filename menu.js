@@ -41,16 +41,17 @@ async function loadState() {
   soundCount = Array.isArray(s.sounds) ? s.sounds.length : 0;
 }
 
+/* 説明文（#desc）に一時メッセージを出す。cls は is-good / is-bad。 */
 function setNote(text, cls) {
-  const n = $('note');
-  n.textContent = text;
-  n.className = `menu__note ${cls || ''}`.trim();
+  const d = $('desc');
+  d.textContent = text;
+  d.className = `menu__desc ${cls || ''}`.trim();
 }
 
 /*
- * 3ステップの案内で「次にやること」を1つに絞る。
+ * 各ステップを「見出し → 説明文 → ボタン」の縦流れで表示する。
  *  ステップ1: 再生タブ未設定 → 再生タブを決める
- *  ステップ2: 再生タブ設定済み・音声未設定 → 音声（音源タブ/音源ファイル）を用意
+ *  ステップ2: 再生タブ設定済み・音声未設定 → 音声（音源タブ/音声ファイル）を用意
  *  ステップ3: 音声あり → 操作パネルで再生
  * ステップ2→3 は置き換えではなく追加表示（取り込みは残し、複数追加できる）。
  */
@@ -58,53 +59,51 @@ function render() {
   const connected = targetTabId != null;
   const isOutput = connected && cur && cur.id === targetTabId;
   const hasAudio = sources.length > 0 || soundCount > 0;
+  const capturable = Boolean(cur && isCapturable(cur.url));
 
-  // --- 再生タブ section ---
-  // 再生タブは同時に1つ。設定後は不要になるため接続中はセクションごと隠す
-  //（切断は操作パネルで行う）。未接続のときだけ「再生タブにする」を出す。
-  $('secOutput').classList.toggle('is-hidden', connected);
-  $('btnSetOutput').disabled = !(cur && isCapturable(cur.url));
+  // --- ボタンの表示・活性 ---
+  // 再生タブは同時に1つ。設定後は不要なので接続中は「再生タブにする」を隠す
+  //（切断は操作パネルで行う）。取り込み・操作パネルは接続中のみ表示する。
+  $('btnSetOutput').classList.toggle('is-hidden', connected);
+  $('btnSetOutput').disabled = !capturable;
 
-  // --- 音源タブ section（取り込み） ---
-  const srcStatus = $('srcStatus');
-  srcStatus.textContent = sources.length ? `${sources.length}件` : 'なし';
-  srcStatus.className = `menu__status ${sources.length ? 'is-on' : 'is-off'}`;
-
+  $('btnAddSource').classList.toggle('is-hidden', !connected);
   // 取り込み可否：再生タブ設定済み & 現在タブが再生タブ自身でない & キャプチャ可能
-  const canAdd = connected && cur && cur.id !== targetTabId && isCapturable(cur.url);
-  $('btnAddSource').disabled = !canAdd;
+  $('btnAddSource').disabled = !(connected && cur && cur.id !== targetTabId && capturable);
 
-  if (!connected) {
-    setNote('', '');
-  } else if (isOutput) {
-    // 現在タブ＝再生タブ自身なので取り込み不可。理由と次の行動を必ず示す。
-    setNote('このタブは再生タブなので、このタブ自身の音声は取り込めません。webページの音声を流すには、その音声を再生しているタブでこのメニューを開いて取り込んでください。音声ファイルを使うなら下のボタンから追加できます。', '');
-  } else if (cur && !isCapturable(cur.url)) {
-    setNote('このタブは取り込めません（Chromeの内部ページなど）。', '');
-  } else {
-    setNote('「このタブの音声を取り込む」を押すと、このタブの音声が再生タブで流れます。', '');
-  }
-
-  // --- 操作パネル section（音声ファイル追加 / 再生） ---
-  // 音声未設定なら「開いて音声ファイルを追加」、あれば「操作パネルを開く（再生）」。
+  $('btnOpenPanel').classList.toggle('is-hidden', !connected);
   $('btnOpenPanel').textContent = hasAudio ? '操作パネルを開く' : '操作パネルを開いて音声ファイルを追加';
 
-  // --- 案内文とセクションの出し分け ---
-  let stepMsg;
+  // --- 見出しと説明文 ---
+  let title, desc;
   if (!connected) {
-    stepMsg = (cur && !isCapturable(cur.url))
-      ? 'このタブは再生タブにできません。動画や資料などのタブで開き直してください'
-      : 'まずは音声を再生する場所を決めましょう';
+    title = 'まずは音声を再生する場所を決めましょう';
+    desc = capturable
+      ? '音声はここで選んだタブの中で再生されます。共有するスライドや配信画面のタブで、下のボタンを押してください。'
+      : 'このタブ（Chromeの内部ページなど）は再生タブにできません。動画や資料などのタブで開き直してください。';
   } else if (!hasAudio) {
-    stepMsg = '再生する音声を設定しましょう';
+    title = '再生する音声を設定しましょう';
+    desc = sourceStepDesc(isOutput, capturable);
   } else {
-    stepMsg = '音声を再生しましょう';
+    title = '音声を再生しましょう';
+    desc = '操作パネルの再生ボタンで音を鳴らせます。音声を足すときは、webページはそのタブで取り込み、音声ファイルは操作パネルから追加します。';
   }
-  $('stepMsg').textContent = stepMsg;
+  $('stepMsg').textContent = title;
+  const d = $('desc');
+  d.textContent = desc;
+  d.className = 'menu__desc'; // 直前の is-good/is-bad 着色をリセット
+}
 
-  // ステップ1では音源タブ・操作パネルを隠し、選択肢を再生タブ設定だけに絞る。
-  $('secSource').classList.toggle('is-hidden', !connected);
-  $('secPanel').classList.toggle('is-hidden', !connected);
+/* ステップ2（再生タブ設定済み・音声未設定）の説明文。現在タブの状態で出し分ける。 */
+function sourceStepDesc(isOutput, capturable) {
+  if (isOutput) {
+    // 現在タブ＝再生タブ自身なので取り込みボタンが押せない。理由と次の行動を示す。
+    return 'いま開いているこのタブは再生タブ自身なので、音声は取り込めません。webページの音声はそのタブでこのメニューを開いて取り込み、音声ファイルは操作パネルから追加します。';
+  }
+  if (!capturable) {
+    return 'このタブは取り込めません（Chromeの内部ページなど）。webページの音声はそのタブでメニューを開いて取り込み、音声ファイルは操作パネルから追加します。';
+  }
+  return '「このタブの音声を取り込む」で、このタブの音声を再生タブへ流せます。効果音などの音声ファイルは操作パネルから追加できます。';
 }
 
 /** tabCapture.getMediaStreamId を Promise 化。lastError は reject する。 */
