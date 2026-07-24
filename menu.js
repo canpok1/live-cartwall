@@ -16,7 +16,8 @@ const $ = (id) => document.getElementById(id);
 let cur = null;          // 現在のタブ {id, title, url}
 let targetTabId = null;  // 再生タブ（出力先）
 let targetTabTitle = '';
-let sources = [];        // タブ音源メタ [{ sourceId, title, volume }]
+let sources = [];        // 音源タブ（取り込み）メタ [{ sourceId, title, volume }]
+let soundCount = 0;      // 音源ファイル（再生ボタン）の数
 
 /** キャプチャ・注入ができないタブ（Chrome内部ページ・ストア等）を弾く */
 function isCapturable(url) {
@@ -33,10 +34,11 @@ async function getCurrentTab() {
 }
 
 async function loadState() {
-  const s = await chrome.storage.local.get(['targetTabId', 'targetTabTitle', 'tabSources']);
+  const s = await chrome.storage.local.get(['targetTabId', 'targetTabTitle', 'tabSources', 'sounds']);
   targetTabId = s.targetTabId ?? null;
   targetTabTitle = s.targetTabTitle ?? '';
   sources = Array.isArray(s.tabSources) ? s.tabSources : [];
+  soundCount = Array.isArray(s.sounds) ? s.sounds.length : 0;
 }
 
 function setNote(text, cls) {
@@ -45,22 +47,32 @@ function setNote(text, cls) {
   n.className = `menu__note ${cls || ''}`.trim();
 }
 
+/*
+ * 3ステップの案内で「次にやること」を1つに絞る。
+ *  ステップ1: 再生タブ未設定 → 再生タブを決める
+ *  ステップ2: 再生タブ設定済み・音声未設定 → 音声（音源タブ/音源ファイル）を用意
+ *  ステップ3: 音声あり → 操作パネルで再生
+ * ステップ2→3 は置き換えではなく追加表示（取り込みは残し、複数追加できる）。
+ */
 function render() {
   const connected = targetTabId != null;
   const isOutput = connected && cur && cur.id === targetTabId;
+  const hasAudio = sources.length > 0 || soundCount > 0;
 
+  // --- 再生タブ section ---
   const outStatus = $('outStatus');
   outStatus.textContent = connected ? (targetTabTitle ? `接続中 · ${targetTabTitle}` : '接続中') : '未接続';
   outStatus.className = `menu__status ${connected ? 'is-on' : 'is-off'}`;
 
-  // 再生タブは同時に1つ。いずれかに設定中は「切断」しか出さない（別タブへ
-  // 設定し直すには必ず切断を挟ませる）。未接続のときだけ「再生タブにする」。
+  // 再生タブは同時に1つ。設定中は「切断」しか出さない（別タブへ設定し直すには
+  // 必ず切断を挟ませる）。未接続のときだけ「再生タブにする」。
   const btnSet = $('btnSetOutput');
   const btnDisc = $('btnDisconnect');
   btnSet.classList.toggle('is-hidden', connected);
   btnDisc.classList.toggle('is-hidden', !connected);
   btnSet.disabled = !(cur && isCapturable(cur.url));
 
+  // --- 音源タブ section（取り込み） ---
   const srcStatus = $('srcStatus');
   srcStatus.textContent = sources.length ? `${sources.length}件` : 'なし';
   srcStatus.className = `menu__status ${sources.length ? 'is-on' : 'is-off'}`;
@@ -70,16 +82,37 @@ function render() {
   $('btnAddSource').disabled = !canAdd;
 
   if (!connected) {
-    setNote(cur && !isCapturable(cur.url)
-      ? 'このタブは再生タブにできません（Chromeの内部ページなど）。'
-      : 'まず再生タブを設定してください。', '');
+    setNote('', '');
   } else if (isOutput) {
     setNote('このタブは再生タブです。別のタブを取り込むには、そのタブでこのメニューを開いてください。', '');
   } else if (cur && !isCapturable(cur.url)) {
     setNote('このタブは取り込めません（Chromeの内部ページなど）。', '');
   } else {
-    setNote('「このタブの音声を取り込む」で再生タブへ合流します。', '');
+    setNote('他タブで再生中の音声を再生タブへ合流させます。', '');
   }
+
+  // --- 操作パネル section（音源追加 / 再生） ---
+  // 音声未設定なら「開いて音源を追加」、あれば「操作パネルを開く（再生）」。
+  $('btnOpenPanel').textContent = hasAudio ? '操作パネルを開く' : '操作パネルを開いて音源を追加';
+
+  // --- ステップ表示とセクションの出し分け ---
+  let stepNo, stepMsg;
+  if (!connected) {
+    stepNo = '1';
+    stepMsg = (cur && !isCapturable(cur.url))
+      ? 'このタブは再生タブにできません。動画や資料などのタブで開き直してください'
+      : 'まずは音声を再生する場所を決めましょう';
+  } else if (!hasAudio) {
+    stepNo = '2'; stepMsg = '再生する音声を設定しましょう';
+  } else {
+    stepNo = '3'; stepMsg = '音声を再生しましょう';
+  }
+  $('stepNo').textContent = stepNo;
+  $('stepMsg').textContent = stepMsg;
+
+  // ステップ1では音源タブ・操作パネルを隠し、選択肢を再生タブ設定だけに絞る。
+  $('secSource').classList.toggle('is-hidden', !connected);
+  $('secPanel').classList.toggle('is-hidden', !connected);
 }
 
 /** tabCapture.getMediaStreamId を Promise 化。lastError は reject する。 */

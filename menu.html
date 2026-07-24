@@ -12,8 +12,14 @@
     <span class="menu__brand">Live Cartwall</span>
   </header>
 
+  <!-- ステップ案内：状態に応じて「次にやること」を1つ示す -->
+  <div class="menu__step" id="step">
+    <span class="menu__stepno" id="stepNo">1</span>
+    <span class="menu__stepmsg" id="stepMsg">まずは音声を再生する場所を決めましょう</span>
+  </div>
+
   <!-- 再生タブ（出力先） -->
-  <section class="menu__sec">
+  <section class="menu__sec" id="secOutput">
     <div class="menu__sectop">
       <span class="menu__sectitle">再生タブ</span>
       <span class="menu__status is-off" id="outStatus">未接続</span>
@@ -22,19 +28,18 @@
     <button class="mbtn mbtn--ghost is-hidden" id="btnDisconnect" type="button">この再生タブを切断</button>
   </section>
 
-  <!-- 音源タブ -->
-  <section class="menu__sec">
+  <!-- 音源タブ（取り込み） -->
+  <section class="menu__sec is-hidden" id="secSource">
     <div class="menu__sectop">
       <span class="menu__sectitle">音源タブ</span>
       <span class="menu__status is-off" id="srcStatus">なし</span>
     </div>
     <button class="mbtn" id="btnAddSource" type="button" disabled>このタブの音声を取り込む</button>
-    <p class="menu__note" id="note">
-      再生タブに接続してから、取り込みたいタブでこのメニューを開いて押してください。
-    </p>
+    <p class="menu__note" id="note"></p>
   </section>
 
-  <footer class="menu__foot">
+  <!-- 操作パネル（音源追加 / 再生） -->
+  <footer class="menu__foot is-hidden" id="secPanel">
     <button class="mbtn mbtn--wide" id="btnOpenPanel" type="button">操作パネルを開く</button>
   </footer>
 
