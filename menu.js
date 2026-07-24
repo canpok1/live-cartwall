@@ -83,31 +83,28 @@ function render() {
 
   if (!connected) {
     setNote('', '');
-  } else if (isOutput) {
-    setNote('このタブは再生タブです。別のタブを取り込むには、そのタブでこのメニューを開いてください。', '');
   } else if (cur && !isCapturable(cur.url)) {
     setNote('このタブは取り込めません（Chromeの内部ページなど）。', '');
   } else {
-    setNote('他タブで再生中の音声を再生タブへ合流させます。', '');
+    // 「今このタブを取り込む」動線が伝わるよう、webページのタブ上で押す旨を明記。
+    setNote('webページの音声を再生したい場合は、webページを表示したタブ上で取り込むボタンを押してください。', '');
   }
 
-  // --- 操作パネル section（音源追加 / 再生） ---
-  // 音声未設定なら「開いて音源を追加」、あれば「操作パネルを開く（再生）」。
-  $('btnOpenPanel').textContent = hasAudio ? '操作パネルを開く' : '操作パネルを開いて音源を追加';
+  // --- 操作パネル section（音声ファイル追加 / 再生） ---
+  // 音声未設定なら「開いて音声ファイルを追加」、あれば「操作パネルを開く（再生）」。
+  $('btnOpenPanel').textContent = hasAudio ? '操作パネルを開く' : '操作パネルを開いて音声ファイルを追加';
 
-  // --- ステップ表示とセクションの出し分け ---
-  let stepNo, stepMsg;
+  // --- 案内文とセクションの出し分け ---
+  let stepMsg;
   if (!connected) {
-    stepNo = '1';
     stepMsg = (cur && !isCapturable(cur.url))
       ? 'このタブは再生タブにできません。動画や資料などのタブで開き直してください'
       : 'まずは音声を再生する場所を決めましょう';
   } else if (!hasAudio) {
-    stepNo = '2'; stepMsg = '再生する音声を設定しましょう';
+    stepMsg = '再生する音声を設定しましょう';
   } else {
-    stepNo = '3'; stepMsg = '音声を再生しましょう';
+    stepMsg = '音声を再生しましょう';
   }
-  $('stepNo').textContent = stepNo;
   $('stepMsg').textContent = stepMsg;
 
   // ステップ1では音源タブ・操作パネルを隠し、選択肢を再生タブ設定だけに絞る。

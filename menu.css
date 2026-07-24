@@ -52,30 +52,16 @@ body.menu {
 }
 
 .menu__step {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 11px;
+  padding: 10px 12px;
   background: linear-gradient(180deg, #2b241c, #241d16);
   border: 1px solid var(--rule-2);
   border-left: 3px solid var(--amber);
   border-radius: 5px;
 }
-.menu__stepno {
-  flex: none;
-  width: 20px; height: 20px;
-  display: grid;
-  place-items: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--rack);
-  background: var(--amber);
-  border-radius: 50%;
-}
 .menu__stepmsg {
   font-size: 12.5px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .menu__sec {
