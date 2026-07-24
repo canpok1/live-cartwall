@@ -205,11 +205,13 @@
     return status();
   }
 
-  function stopAll(immediate) {
+  function stopAll(immediate, keepTabSources) {
     pendingPlays.clear(); // 保留中の再生要求も破棄する
     for (const id of [...active.keys()]) stop(id, immediate ? 0 : undefined);
-    // タブ音源も出力から外す（ソースタブ自体はタブ側で鳴り続ける）
-    removeAllTabSources();
+    // タブ音源も出力から外す（ソースタブ自体はタブ側で鳴り続ける）。
+    // keepTabSources=true のときは残す（操作パネルを閉じただけでは音源
+    // ルーティングを切らない。音源はアイコンメニューから独立して管理する）。
+    if (!keepTabSources) removeAllTabSources();
     return status();
   }
 
@@ -254,12 +256,12 @@
 
     let stream;
     try {
-      // streamId は desktopCapture の共有ピッカーで発行されたもの。
-      // desktopCapture 由来なので chromeMediaSource は 'desktop' を指定する。
+      // streamId は tabCapture.getMediaStreamId が consumerTabId=このタブ向けに
+      // 発行したもの。tab 由来なので chromeMediaSource は 'tab' を指定する。
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           mandatory: {
-            chromeMediaSource: 'desktop',
+            chromeMediaSource: 'tab',
             chromeMediaSourceId: streamId
           }
         },
@@ -293,7 +295,7 @@
     return status();
   }
 
-  /** ルーティングを解除する。track.stop() でキャプチャを終了し共有を停止する */
+  /** ルーティングを解除する。track.stop() でソースタブのローカル音を復帰させる */
   function removeTabSource(sourceId) {
     const e = tabSources.get(sourceId);
     if (!e) return status();
@@ -316,7 +318,7 @@
           case 'RELOAD':      sendResponse(await loadSounds()); break;
           case 'PLAY':        sendResponse(play(msg.id)); break;
           case 'STOP':        sendResponse(stop(msg.id)); break;
-          case 'STOP_ALL':    sendResponse(stopAll(msg.immediate)); break;
+          case 'STOP_ALL':    sendResponse(stopAll(msg.immediate, msg.keepTabSources)); break;
           case 'SET_VOLUME':  sendResponse(setVolume(msg.id, msg.value)); break;
           case 'SET_MASTER':  sendResponse(setMaster(msg.value)); break;
           case 'ADD_TAB_SOURCE':    sendResponse(await addTabSource(msg.sourceId, msg.streamId, msg.volume)); break;

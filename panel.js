@@ -10,14 +10,7 @@ const el = {
   rail: $('rail'),
   railLabel: $('railLabel'),
   btnReload: $('btnReload'),
-  tabSelect: $('tabSelect'),
-  btnRefresh: $('btnRefresh'),
-  btnConnect: $('btnConnect'),
-  btnDisconnect: $('btnDisconnect'),
-  connNote: $('connNote'),
-  bayOutput: $('bayOutput'),
-  outputStatus: $('outputStatus'),
-  btnAddSource: $('btnAddSource'),
+  libNote: $('libNote'),
   tabSources: $('tabSources'),
   sourceNote: $('sourceNote'),
   baySource: $('baySource'),
@@ -54,13 +47,11 @@ let mode = 'edit';
 /* ドラッグ中のタイルのID（編集モードの並び替え用）。未ドラッグ時は null */
 let draggedId = null;
 
-/* タブ音源（ライブ音声のルーティング）。ストリームは揮発的なので永続化しない。
- * desktopCapture の共有ピッカーで取り込むため、どのタブを選んだかは取得できない。
- * 各要素: { sourceId, title, volume, connected } */
+/* タブ音源（ライブ音声のルーティング）のメタ情報。実ストリームは content 側。
+ * 取り込みはアイコンメニューが行い、メタは storage.tabSources で共有する。
+ * 各要素: { sourceId, title, volume } */
 let tabSources = [];
 let connectedSources = new Set();
-/* LIST_TABS で得た全タブ（接続中タブのタイトル解決に使う） */
-let allTabs = [];
 
 /* ---------- 種別のプリセット ----------
  * bgm : 空間を満たす音。ループし、フェードで出入りする。控えめな音量。
@@ -114,7 +105,7 @@ function applyTileColor(tile, color, kind) {
 /* ---------- ストレージ ---------- */
 
 async function loadState() {
-  const s = await chrome.storage.local.get(['sounds', 'masterVolume', 'targetTabId', 'targetTabTitle', 'mode', 'tileWidth', 'tileHeight']);
+  const s = await chrome.storage.local.get(['sounds', 'masterVolume', 'targetTabId', 'targetTabTitle', 'mode', 'tileWidth', 'tileHeight', 'tabSources']);
   sounds = s.sounds ?? [];
   masterVolume = s.masterVolume ?? 1;
   targetTabId = s.targetTabId ?? null;
@@ -122,6 +113,7 @@ async function loadState() {
   mode = s.mode === 'operate' ? 'operate' : 'edit';
   tileWidth = s.tileWidth ?? 96;
   tileHeight = s.tileHeight ?? 72;
+  tabSources = Array.isArray(s.tabSources) ? s.tabSources : [];
 
   // 旧データ（color 未設定）は種別の既定色を補い、以後は永続化する
   let migrated = false;
@@ -146,169 +138,13 @@ function toTab(payload) {
 
 /* ---------- タブ選択 ---------- */
 
-function tabHost(url) {
-  try { return new URL(url).hostname; } catch { return ''; }
-}
-
-/* 各通常ウィンドウの「現在のタブ」（active）を先頭へ集約する。
- * active は windowId 昇順で前に、それ以外は元の並びを保つ。 */
-function currentFirst(list) {
-  const active = list.filter((t) => t.active).sort((a, b) => a.windowId - b.windowId);
-  const rest = list.filter((t) => !t.active);
-  return [...active, ...rest];
-}
-
-/* option のラベル。アクティブタブには「現在のタブ」マークを付ける。
- * 通常ウィンドウが複数あるときだけ、どのウィンドウかを番号で区別する。 */
-function tabOptionLabel(t, seqOf, multiWindow) {
-  const base = `${t.title.slice(0, 46)} — ${tabHost(t.url)}`;
-  if (!t.active) return base;
-  return multiWindow ? `【現在のタブ・ウィンドウ${seqOf(t.windowId)}】 ${base}` : `【現在のタブ】 ${base}`;
-}
-
-/* タブ一覧を <select> へ反映する。アクティブタブを先頭に集約して強調ラベルを付ける。
- * selectedId が一覧にあればそれを選択状態にする。空なら disabled のメッセージを出す。
- * ウィンドウ番号の採番はこの select に残ったアクティブタブ単位で行う。 */
-function fillTabSelect(selectEl, list, { emptyText, selectedId }) {
-  selectEl.innerHTML = '';
-
-  if (list.length === 0) {
-    const opt = document.createElement('option');
-    opt.textContent = emptyText;
-    opt.disabled = true;
-    selectEl.appendChild(opt);
-    return;
-  }
-
-  const activeWinIds = [...new Set(list.filter((t) => t.active).map((t) => t.windowId))].sort((a, b) => a - b);
-  const multiWindow = activeWinIds.length >= 2;
-  const seqOf = (winId) => activeWinIds.indexOf(winId) + 1;
-
-  for (const t of currentFirst(list)) {
-    const opt = document.createElement('option');
-    opt.value = String(t.id);
-    opt.textContent = tabOptionLabel(t, seqOf, multiWindow);
-    if (selectedId != null && t.id === selectedId) opt.selected = true;
-    selectEl.appendChild(opt);
-  }
-}
-
-async function refreshTabs() {
-  const res = await chrome.runtime.sendMessage({ type: 'LIST_TABS' });
-  if (!res?.ok) return;
-
-  allTabs = res.tabs;
-
-  // 接続中タブが一覧にあればタイトルを最新化（タブ名変更・遷移に追従）
-  if (targetTabId != null) {
-    const cur = allTabs.find((t) => t.id === targetTabId);
-    if (cur) {
-      targetTabTitle = cur.title;
-      chrome.storage.local.set({ targetTabTitle });
-    }
-  }
-
-  fillTabSelect(el.tabSelect, allTabs, {
-    emptyText: '(開いているタブがありません)',
-    selectedId: targetTabId
-  });
-
-  // タイトルが最新化されている場合があるので要約も更新する
-  updateOutputStatus();
-}
-
-async function connect() {
-  const tabId = Number(el.tabSelect.value);
-  if (!Number.isFinite(tabId)) return;
-
-  setNote('接続しています…', '');
-  const res = await chrome.runtime.sendMessage({ type: 'INJECT', tabId });
-
-  if (res?.ok) {
-    targetTabId = tabId;
-    targetTabTitle = allTabs.find((t) => t.id === tabId)?.title ?? '';
-    await chrome.storage.local.set({ targetTabId, targetTabTitle });
-    setNote('接続しました。このタブの中で音が鳴ります。', 'is-good');
-    applyConnectionState();
-    poll();
-  } else {
-    setNote('このタブには接続できません（Chromeの設定ページやストアのページなど）。別のタブを選んでください。', 'is-bad');
-  }
-}
-
-/**
- * 出力先タブへ明示的に切断する。
- * 出力先タブの全再生を即停止しタブ音源のルーティングも解放したうえで、
- * targetTabId をクリアして未接続状態へ戻す（旧タブに音を残さない）。
- */
-async function disconnect() {
-  await resetConnectionState({ stopTab: true });
-  setNote('切断しました。別のタブを選んで接続できます。', '');
-  setRail('', '待機中');
-}
-
-/**
- * 接続状態をローカルで解除し、UIを未接続へ戻す。
- * stopTab=true のときだけ出力先タブへ STOP_ALL immediate を送る
- *（タブが閉じられて存在しない場合の整合では送らない）。
- */
-async function resetConnectionState({ stopTab }) {
-  if (stopTab) await toTab({ type: 'STOP_ALL', immediate: true });
-  await chrome.storage.local.remove(['targetTabId', 'targetTabTitle']);
-  targetTabId = null;
-  targetTabTitle = '';
-  tabSources = [];
-  connectedSources = new Set();
-  playingIds = new Set();
-  renderTabSources();
-  paintLive();
-  applyConnectionState();
-  await refreshTabs();
-}
-
+/* 音源ライブラリ（ファイル読込）向けの一時メッセージ。 */
 function setNote(text, cls) {
-  el.connNote.textContent = text;
-  el.connNote.className = `note ${cls}`.trim();
+  el.libNote.textContent = text;
+  el.libNote.className = `note ${cls}`.trim();
 }
 
-/* 折りたたみ見出しの要約（出力先タブの接続状態）を更新する */
-function updateOutputStatus() {
-  const connected = targetTabId != null;
-  el.outputStatus.textContent = connected
-    ? (targetTabTitle ? `接続中 · ${targetTabTitle}` : '接続中')
-    : '未接続';
-  el.outputStatus.className = `fold__status ${connected ? 'is-on' : 'is-off'}`;
-}
-
-/**
- * 接続状態に応じて出力先タブUIを切り替える。
- * 接続中はタブ選択を無効化し、接続ボタンを隠して切断ボタンを出す。
- */
-function applyConnectionState() {
-  const connected = targetTabId != null;
-  el.tabSelect.disabled = connected;
-  el.btnConnect.classList.toggle('is-hidden', connected);
-  el.btnDisconnect.classList.toggle('is-hidden', !connected);
-  updateOutputStatus();
-}
-
-/* ---------- タブ音源（ライブ音声のルーティング） ---------- */
-
-function setSourceNote(text, cls) {
-  el.sourceNote.textContent = text;
-  el.sourceNote.className = `note ${cls}`.trim();
-}
-
-/**
- * ユーザー向けの文言に、background/content から返る実際のエラー内容を
- * 「（詳細: …）」として付け足す。原因調査できるよう真のエラーを握りつぶさない。
- * NO_TAB は専用文言で説明済みなので重複させない。
- */
-function withErrorDetail(text, res) {
-  const err = res?.error;
-  if (!err || err === 'NO_TAB') return text;
-  return `${text}（詳細: ${err}）`;
-}
+/* ---------- タブ音源（一覧・管理） ---------- */
 
 /* 折りたたみ見出しの要約（タブ音源の件数・状態）を更新する */
 function updateSourceStatus() {
@@ -326,105 +162,19 @@ function updateSourceStatus() {
   }
 }
 
-/**
- * Chrome の共有ピッカーを開き、出力先タブで消費できる streamId を得る。
- * desktopCapture は activeTab を要求しないので、パネルから任意タブの音声を
- * 取り込める（tabCapture.getMediaStreamId の activeTab 制約を回避）。
- * 出力先タブを targetTab に指定することで、返る streamId を出力先タブの
- * コンテンツスクリプトが getUserMedia で消費できる（origin が一致するフレーム限定）。
- * @returns {Promise<{ok:true, streamId:string}|{ok:false, reason:'cancel'|'noaudio'|'notab'}>}
- */
-async function pickTabAudioStream() {
-  let outputTab;
-  try {
-    outputTab = await chrome.tabs.get(targetTabId);
-  } catch (_) {
-    return { ok: false, reason: 'notab' };
-  }
-  return new Promise((resolve) => {
-    // ['tab','audio'] … Chromeタブのみを候補にし「タブの音声を共有」を有効化
-    chrome.desktopCapture.chooseDesktopMedia(['tab', 'audio'], outputTab, (streamId, options) => {
-      if (!streamId) { resolve({ ok: false, reason: 'cancel' }); return; }
-      // 音声を共有できないソース（音声チェックを外した等）は取り込んでも無音になる
-      if (options && options.canRequestAudioTrack === false) {
-        resolve({ ok: false, reason: 'noaudio' });
-        return;
-      }
-      resolve({ ok: true, streamId });
-    });
+/** タブ音源メタ（sourceId/title/volume）を storage へ保存し、メニューと共有する。 */
+async function persistTabSources() {
+  await chrome.storage.local.set({
+    tabSources: tabSources.map((s) => ({ sourceId: s.sourceId, title: s.title, volume: s.volume }))
   });
 }
 
-/** ピッカーが streamId を返さなかったときの案内文 */
-function pickErrorText(reason) {
-  switch (reason) {
-    case 'noaudio': return '音声を共有できないソースです。「タブの音声を共有」にチェックできるタブを選んでください。';
-    case 'notab':   return '出力先タブが見つかりません。接続し直してください。';
-    default:        return '取り込みをキャンセルしました。';
-  }
-}
-
-/** 共有ピッカーでソースタブを選び、出力先タブへ取り込む */
-async function addSource() {
-  if (targetTabId == null) {
-    setSourceNote('先に出力先タブへ接続してください。', 'is-bad');
-    return;
-  }
-
-  setSourceNote('取り込むタブを選んでください…', '');
-  const pick = await pickTabAudioStream();
-  if (!pick.ok) {
-    setSourceNote(pickErrorText(pick.reason), pick.reason === 'cancel' ? '' : 'is-bad');
-    return;
-  }
-
-  const sourceId = crypto.randomUUID();
-  const volume = 0.8;
-  const title = `共有音源 ${tabSources.length + 1}`;
-  const add = await toTab({ type: 'ADD_TAB_SOURCE', sourceId, streamId: pick.streamId, volume });
-  if (!add?.ok) {
-    setSourceNote(withErrorDetail('音声の取り込みに失敗しました。もう一度お試しください。', add), 'is-bad');
-    return;
-  }
-
-  tabSources.push({ sourceId, title, volume, connected: true });
-  connectedSources.add(sourceId);
-  setSourceNote('取り込みました。出力先タブでのみ再生されます。', 'is-good');
-  renderTabSources();
-}
-
-/**
- * 切断された（要再接続）ソースを取り込み直す。
- * desktopCapture では選んだタブを特定できないため、再接続でも共有ピッカーを
- * 開いて選び直す（sourceId・音量は引き継ぐ）。
- */
-async function reconnectSource(src) {
-  if (targetTabId == null) {
-    setSourceNote('先に出力先タブへ接続してください。', 'is-bad');
-    return;
-  }
-  setSourceNote('取り込むタブを選び直してください…', '');
-  const pick = await pickTabAudioStream();
-  if (!pick.ok) {
-    setSourceNote(pickErrorText(pick.reason), pick.reason === 'cancel' ? '' : 'is-bad');
-    return;
-  }
-  const add = await toTab({ type: 'ADD_TAB_SOURCE', sourceId: src.sourceId, streamId: pick.streamId, volume: src.volume });
-  if (!add?.ok) {
-    setSourceNote(withErrorDetail('再接続に失敗しました。', add), 'is-bad');
-    return;
-  }
-  src.connected = true;
-  connectedSources.add(src.sourceId);
-  setSourceNote('再接続しました。', 'is-good');
-  renderTabSources();
-}
-
-/** ルーティングを解除してパネルの一覧からも消す */
+/** ルーティングを解除してパネルの一覧・保存メタからも消す */
 async function removeSource(sourceId) {
   await toTab({ type: 'REMOVE_TAB_SOURCE', sourceId });
   tabSources = tabSources.filter((s) => s.sourceId !== sourceId);
   connectedSources.delete(sourceId);
+  await persistTabSources();
   renderTabSources();
 }
 
@@ -435,9 +185,8 @@ function renderTabSources() {
 }
 
 /**
- * ソース名をインラインで編集する。desktopCapture では取り込んだタブを特定
- * できず名前が自動採番のため、利用者が分かりやすい名前を付けられるようにする。
- * tabSources は揮発的なのでセッション内でのみ保持する。
+ * ソース名をインラインで編集する。既定名は取り込み時のタブ名だが、
+ * 利用者が分かりやすい名前へ変更できるようにする（storage に保存）。
  */
 function startRename(src, nameEl) {
   const input = document.createElement('input');
@@ -456,7 +205,7 @@ function startRename(src, nameEl) {
     done = true;
     if (save) {
       const v = input.value.trim();
-      if (v) src.title = v;
+      if (v && v !== src.title) { src.title = v; persistTabSources(); }
     }
     renderTabSources();
   };
@@ -527,20 +276,17 @@ function renderTabSource(src) {
       num.textContent = String(Math.round(src.volume * 100));
       toTab({ type: 'SET_TAB_VOLUME', sourceId: src.sourceId, value: src.volume });
     });
+    // 確定時のみ storage に保存（ドラッグ中の書き込み過多を避ける）
+    lvl.addEventListener('change', () => persistTabSources());
 
     bottom.append(tag, lvl, num);
   } else {
     const lost = document.createElement('span');
     lost.className = 'tsrc__lost';
-    lost.textContent = '要再接続';
+    // 再接続はアイコンメニューから行う（activeTab が要るためパネルからは不可）
+    lost.textContent = '要再接続（音源タブでアイコン→取り込む）';
 
-    const re = document.createElement('button');
-    re.className = 'tsrc__re';
-    re.type = 'button';
-    re.textContent = '再接続';
-    re.addEventListener('click', () => reconnectSource(src));
-
-    bottom.append(lost, re);
+    bottom.append(lost);
   }
 
   row.appendChild(bottom);
@@ -991,13 +737,9 @@ function handleTabResult(res) {
   if (!res) return;
 
   if (res.error === 'NO_TAB') {
-    setRail('warn', '出力先タブが未設定');
-    // パネルは接続中と認識しているのに出力先タブが消えている
-    //（タブが外部で閉じられた等）。未接続へ整合し、操作不能を防ぐ。
-    if (targetTabId != null) {
-      setNote('出力先タブが見つかりません。切断しました。別のタブを選んで接続してください。', 'is-bad');
-      resetConnectionState({ stopTab: false });
-    }
+    // 再生タブが未設定 or 外部で閉じられた。設定・切断はアイコンメニュー側で
+    // 行い、targetTabId は storage.onChanged 経由で解除が反映される。
+    setRail('warn', '再生タブが未設定');
     return;
   }
   if (res.error === 'NOT_INJECTED') {
@@ -1053,10 +795,6 @@ document.addEventListener('click', (e) => {
   closeAllMenus();
 });
 
-el.btnRefresh.addEventListener('click', refreshTabs);
-el.btnConnect.addEventListener('click', connect);
-el.btnDisconnect.addEventListener('click', disconnect);
-el.btnAddSource.addEventListener('click', addSource);
 el.btnReload.addEventListener('click', async () => {
   const res = await toTab({ type: 'RELOAD' });
   handleTabResult(res);
@@ -1108,7 +846,20 @@ el.btnStopAll.addEventListener('click', async () => {
   // 全停止はタブ音源のルーティングも解除する（出力から外れる）
   tabSources = [];
   connectedSources = new Set();
+  await persistTabSources();
   renderTabSources();
+});
+
+/* storage 経由の変更（アイコンメニューでの取り込み・再生タブ設定/切断）に追従する。 */
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if ('targetTabId' in changes) targetTabId = changes.targetTabId.newValue ?? null;
+  if ('targetTabTitle' in changes) targetTabTitle = changes.targetTabTitle.newValue ?? '';
+  if ('tabSources' in changes) {
+    tabSources = Array.isArray(changes.tabSources.newValue) ? changes.tabSources.newValue : [];
+    renderTabSources();
+    poll(); // 追加直後の接続状態を素早く反映（要再接続の一瞬の点灯を抑える）
+  }
 });
 
 /* ---------- 起動 ---------- */
@@ -1118,17 +869,8 @@ el.btnStopAll.addEventListener('click', async () => {
   applyMode();
   render();
   applyTileSize();
-  await refreshTabs();
-
-  applyConnectionState();
+  renderTabSources();
   updateSourceStatus();
-
-  if (targetTabId != null) {
-    setNote('前回の出力先タブを記憶しています。ページを開き直した場合は接続し直してください。', '');
-  } else {
-    // 未接続なら出力先タブの設定を開いておき、まず接続を促す
-    el.bayOutput.open = true;
-  }
 
   poll();
   setInterval(poll, 1000);

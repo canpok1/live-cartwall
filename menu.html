@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Live Cartwall</title>
+  <link rel="stylesheet" href="menu.css" />
+</head>
+<body class="menu">
+
+  <header class="menu__head">
+    <span class="menu__lamp" aria-hidden="true"></span>
+    <span class="menu__brand">Live Cartwall</span>
+  </header>
+
+  <!-- 現在のタブ -->
+  <div class="menu__cur">
+    <span class="menu__curlabel">現在のタブ</span>
+    <span class="menu__curtab" id="curTab">—</span>
+  </div>
+
+  <!-- 再生タブ（出力先） -->
+  <section class="menu__sec">
+    <div class="menu__sectop">
+      <span class="menu__sectitle">再生タブ</span>
+      <span class="menu__status is-off" id="outStatus">未接続</span>
+    </div>
+    <button class="mbtn" id="btnSetOutput" type="button">このタブを再生タブにする</button>
+    <button class="mbtn mbtn--ghost is-hidden" id="btnDisconnect" type="button">この再生タブを切断</button>
+  </section>
+
+  <!-- 音源タブ -->
+  <section class="menu__sec">
+    <div class="menu__sectop">
+      <span class="menu__sectitle">音源タブ</span>
+      <span class="menu__status is-off" id="srcStatus">なし</span>
+    </div>
+    <button class="mbtn" id="btnAddSource" type="button" disabled>このタブの音声を取り込む</button>
+    <p class="menu__note" id="note">
+      再生タブに接続してから、取り込みたいタブでこのメニューを開いて押してください。
+    </p>
+  </section>
+
+  <footer class="menu__foot">
+    <button class="mbtn mbtn--wide" id="btnOpenPanel" type="button">操作パネルを開く</button>
+  </footer>
+
+  <script src="menu.js"></script>
+</body>
+</html>

@@ -30,16 +30,17 @@ async function openPanel() {
   await chrome.storage.local.set({ panelWindowId: win.id });
 }
 
-chrome.action.onClicked.addListener(openPanel);
+// アイコンのクリックは default_popup（menu.html）が受けるため onClicked は使わない。
+// 操作パネルはメニューの「操作パネルを開く」から OPEN_PANEL メッセージで開く。
 
 chrome.windows.onRemoved.addListener(async (windowId) => {
   const { panelWindowId } = await chrome.storage.local.get('panelWindowId');
   if (windowId === panelWindowId) {
     await chrome.storage.local.remove('panelWindowId');
-    // パネルを閉じたら対象タブの再生を全停止する（リモコンが消えたのに音だけ
-    // 鳴り続けるのを防ぐ）。immediate でフェードなし即停止し、タブ音源の
-    // ルーティングも解除する。targetTabId は残すのでパネル再オープンで再接続できる。
-    await sendToTab({ type: 'STOP_ALL', immediate: true });
+    // パネル（再生ボタン卓）を閉じたら再生中の音は止める（リモコンが消えたのに
+    // 音だけ鳴り続けるのを防ぐ）。ただしタブ音源のルーティングは残す
+    //（音源はアイコンメニューから独立して管理するため）。targetTabId も残す。
+    await sendToTab({ type: 'STOP_ALL', immediate: true, keepTabSources: true });
   }
 });
 
@@ -64,45 +65,37 @@ async function inject(tabId) {
   });
 }
 
-/* ---------- パネルからのメッセージ中継 ----------
- * タブ音源の streamId は、パネル（拡張ページ）から chrome.desktopCapture の
- * 共有ピッカーで取得する。tabCapture.getMediaStreamId は取り込み対象タブに
- * activeTab 権限を要求し、パネルから選ぶ他タブでは常に失敗するため使わない。
+/* ---------- メニュー／パネルからのメッセージ中継 ----------
+ * タブ音源の streamId は、アイコンメニュー（menu.js＝拡張ページ）が
+ * chrome.tabCapture.getMediaStreamId で取得する。メニューを開いた瞬間に
+ * 現在のタブへ activeTab が付与されるため、その場で発行できる。
  */
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
     try {
+      if (msg?.type === 'OPEN_PANEL') {
+        await openPanel();
+        sendResponse({ ok: true });
+        return;
+      }
+
       if (msg?.type === 'INJECT') {
-        await chrome.storage.local.set({ targetTabId: msg.tabId });
+        // 新しい出力先に切り替えるので、旧出力先向けのタブ音源メタは破棄する。
+        await chrome.storage.local.set({ targetTabId: msg.tabId, targetTabTitle: msg.title ?? '', tabSources: [] });
         await inject(msg.tabId);
         // 注入直後に音源を読み込ませる
         sendResponse(await sendToTab({ type: 'RELOAD' }));
         return;
       }
 
-      if (msg?.type === 'LIST_TABS') {
-        const tabs = await chrome.tabs.query({});
-        const extUrl = chrome.runtime.getURL('');
-        // 通常ウィンドウ（type: 'normal'）のIDだけを集める。パネルや他拡張の
-        // popup ウィンドウを「現在のタブ」の判定対象から除くため。
-        const wins = await chrome.windows.getAll();
-        const normalWinIds = new Set(wins.filter((w) => w.type === 'normal').map((w) => w.id));
-        sendResponse({
-          ok: true,
-          tabs: tabs
-            .filter((t) => t.url && !t.url.startsWith(extUrl) && !t.url.startsWith('chrome://'))
-            .map((t) => ({
-              id: t.id,
-              title: t.title || '(無題)',
-              url: t.url,
-              favIconUrl: t.favIconUrl,
-              audible: t.audible,
-              windowId: t.windowId,
-              // 通常ウィンドウのアクティブタブのみ true（popup は除外）
-              active: Boolean(t.active) && normalWinIds.has(t.windowId)
-            }))
-        });
+      if (msg?.type === 'DISCONNECT') {
+        // 出力先タブを切断。旧タブの再生を即停止しタブ音源も解除してから、
+        // targetTabId とタブ音源メタをクリアする（旧タブに音を残さない）。
+        await sendToTab({ type: 'STOP_ALL', immediate: true });
+        await chrome.storage.local.remove(['targetTabId', 'targetTabTitle']);
+        await chrome.storage.local.set({ tabSources: [] });
+        sendResponse({ ok: true });
         return;
       }
 
@@ -136,5 +129,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   const { targetTabId } = await chrome.storage.local.get('targetTabId');
-  if (tabId === targetTabId) await chrome.storage.local.remove('targetTabId');
+  if (tabId === targetTabId) {
+    // 出力先タブが閉じられた。タブ音源メタも一緒に片付ける。
+    await chrome.storage.local.remove(['targetTabId', 'targetTabTitle']);
+    await chrome.storage.local.set({ tabSources: [] });
+  }
 });

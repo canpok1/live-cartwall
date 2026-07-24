@@ -1,0 +1,131 @@
+/* =========================================================================
+ * Live Cartwall — アイコンメニュー（action popup）
+ * 「今見ているタブ」に役割（再生タブ / 音源タブ）を割り当てる小さなメニュー。
+ * ========================================================================= */
+
+:root {
+  --rack:    #17130f;
+  --panel:   #221c16;
+  --panel-2: #2b241c;
+  --rule:    #3b3128;
+  --rule-2:  #4c4034;
+
+  --text:    #efe7da;
+  --dim:     #9c8f7d;
+  --faint:   #6d6355;
+
+  --amber:   #e8a33d;
+  --cool:    #6fa8b8;
+  --live:    #d8443c;
+
+  --sans: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body.menu {
+  width: 320px;
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--rack);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.menu__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.menu__lamp {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--live);
+  box-shadow: 0 0 7px rgba(216, 68, 60, .7);
+}
+.menu__brand {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.menu__cur {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--rule-2);
+  border-radius: 5px;
+}
+.menu__curlabel {
+  font-size: 10px;
+  color: var(--faint);
+  letter-spacing: .08em;
+}
+.menu__curtab {
+  font-size: 12.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu__sec {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+.menu__sectop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.menu__sectitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dim);
+}
+.menu__status {
+  font-size: 11px;
+  font-weight: 600;
+}
+.menu__status.is-off { color: var(--faint); }
+.menu__status.is-on  { color: var(--cool); }
+.menu__status.is-warn { color: var(--amber); }
+
+.mbtn {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--rule-2);
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: center;
+}
+.mbtn:hover:not(:disabled) { border-color: var(--dim); background: #362d23; }
+.mbtn:disabled { opacity: .45; cursor: not-allowed; }
+.mbtn--ghost { background: transparent; }
+.mbtn--ghost:hover:not(:disabled) { border-color: var(--live); color: #eb8c86; }
+.mbtn--wide { padding: 10px 12px; }
+
+.menu__note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+.menu__note.is-good { color: var(--cool); }
+.menu__note.is-bad  { color: #eb8c86; }
+
+.menu__foot { display: flex; }
+
+.is-hidden { display: none !important; }
