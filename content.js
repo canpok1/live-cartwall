@@ -254,10 +254,12 @@
 
     let stream;
     try {
+      // streamId は desktopCapture の共有ピッカーで発行されたもの。
+      // desktopCapture 由来なので chromeMediaSource は 'desktop' を指定する。
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           mandatory: {
-            chromeMediaSource: 'tab',
+            chromeMediaSource: 'desktop',
             chromeMediaSourceId: streamId
           }
         },
@@ -291,7 +293,7 @@
     return status();
   }
 
-  /** ルーティングを解除する。track.stop() でソースタブのローカル音を復帰させる */
+  /** ルーティングを解除する。track.stop() でキャプチャを終了し共有を停止する */
   function removeTabSource(sourceId) {
     const e = tabSources.get(sourceId);
     if (!e) return status();

@@ -17,7 +17,6 @@ const el = {
   connNote: $('connNote'),
   bayOutput: $('bayOutput'),
   outputStatus: $('outputStatus'),
-  sourceSelect: $('sourceSelect'),
   btnAddSource: $('btnAddSource'),
   tabSources: $('tabSources'),
   sourceNote: $('sourceNote'),
@@ -56,13 +55,12 @@ let mode = 'edit';
 let draggedId = null;
 
 /* タブ音源（ライブ音声のルーティング）。ストリームは揮発的なので永続化しない。
- * 各要素: { sourceId, tabId, title, volume, connected } */
+ * desktopCapture の共有ピッカーで取り込むため、どのタブを選んだかは取得できない。
+ * 各要素: { sourceId, title, volume, connected } */
 let tabSources = [];
 let connectedSources = new Set();
 /* LIST_TABS で得た全タブ（接続中タブのタイトル解決に使う） */
 let allTabs = [];
-/* ソース選択に出す候補タブ（LIST_TABS の結果から出力タブを除外） */
-let availableTabs = [];
 
 /* ---------- 種別のプリセット ----------
  * bgm : 空間を満たす音。ループし、フェードで出入りする。控えめな音量。
@@ -215,13 +213,6 @@ async function refreshTabs() {
     selectedId: targetTabId
   });
 
-  // ソース候補（出力先タブは自己キャプチャ防止のため除外）
-  availableTabs = allTabs.filter((t) => t.id !== targetTabId);
-  fillTabSelect(el.sourceSelect, availableTabs, {
-    emptyText: '(取り込めるタブがありません)',
-    selectedId: null
-  });
-
   // タイトルが最新化されている場合があるので要約も更新する
   updateOutputStatus();
 }
@@ -311,11 +302,11 @@ function setSourceNote(text, cls) {
 /**
  * ユーザー向けの文言に、background/content から返る実際のエラー内容を
  * 「（詳細: …）」として付け足す。原因調査できるよう真のエラーを握りつぶさない。
- * NO_TAB / SELF_CAPTURE のように専用文言で説明済みのコードは重複するので付けない。
+ * NO_TAB は専用文言で説明済みなので重複させない。
  */
 function withErrorDetail(text, res) {
   const err = res?.error;
-  if (!err || err === 'NO_TAB' || err === 'SELF_CAPTURE') return text;
+  if (!err || err === 'NO_TAB') return text;
   return `${text}（詳細: ${err}）`;
 }
 
@@ -335,58 +326,90 @@ function updateSourceStatus() {
   }
 }
 
-/** 選択中のソースタブを出力先タブへ取り込む */
+/**
+ * Chrome の共有ピッカーを開き、出力先タブで消費できる streamId を得る。
+ * desktopCapture は activeTab を要求しないので、パネルから任意タブの音声を
+ * 取り込める（tabCapture.getMediaStreamId の activeTab 制約を回避）。
+ * 出力先タブを targetTab に指定することで、返る streamId を出力先タブの
+ * コンテンツスクリプトが getUserMedia で消費できる（origin が一致するフレーム限定）。
+ * @returns {Promise<{ok:true, streamId:string}|{ok:false, reason:'cancel'|'noaudio'|'notab'}>}
+ */
+async function pickTabAudioStream() {
+  let outputTab;
+  try {
+    outputTab = await chrome.tabs.get(targetTabId);
+  } catch (_) {
+    return { ok: false, reason: 'notab' };
+  }
+  return new Promise((resolve) => {
+    // ['tab','audio'] … Chromeタブのみを候補にし「タブの音声を共有」を有効化
+    chrome.desktopCapture.chooseDesktopMedia(['tab', 'audio'], outputTab, (streamId, options) => {
+      if (!streamId) { resolve({ ok: false, reason: 'cancel' }); return; }
+      // 音声を共有できないソース（音声チェックを外した等）は取り込んでも無音になる
+      if (options && options.canRequestAudioTrack === false) {
+        resolve({ ok: false, reason: 'noaudio' });
+        return;
+      }
+      resolve({ ok: true, streamId });
+    });
+  });
+}
+
+/** ピッカーが streamId を返さなかったときの案内文 */
+function pickErrorText(reason) {
+  switch (reason) {
+    case 'noaudio': return '音声を共有できないソースです。「タブの音声を共有」にチェックできるタブを選んでください。';
+    case 'notab':   return '出力先タブが見つかりません。接続し直してください。';
+    default:        return '取り込みをキャンセルしました。';
+  }
+}
+
+/** 共有ピッカーでソースタブを選び、出力先タブへ取り込む */
 async function addSource() {
   if (targetTabId == null) {
     setSourceNote('先に出力先タブへ接続してください。', 'is-bad');
     return;
   }
-  const tabId = Number(el.sourceSelect.value);
-  if (!Number.isFinite(tabId)) return;
-  if (tabId === targetTabId) {
-    setSourceNote('出力先タブ自身は取り込めません。', 'is-bad');
-    return;
-  }
 
-  const tab = availableTabs.find((t) => t.id === tabId);
-  const title = tab?.title || '(無題)';
-
-  setSourceNote('取り込んでいます…', '');
-  const res = await chrome.runtime.sendMessage({ type: 'GET_STREAM_ID', sourceTabId: tabId });
-  if (!res?.ok) {
-    setSourceNote(res?.error === 'NO_TAB'
-      ? '出力先タブが未設定です。先に接続してください。'
-      : withErrorDetail('このタブは取り込めませんでした。', res), 'is-bad');
+  setSourceNote('取り込むタブを選んでください…', '');
+  const pick = await pickTabAudioStream();
+  if (!pick.ok) {
+    setSourceNote(pickErrorText(pick.reason), pick.reason === 'cancel' ? '' : 'is-bad');
     return;
   }
 
   const sourceId = crypto.randomUUID();
   const volume = 0.8;
-  const add = await toTab({ type: 'ADD_TAB_SOURCE', sourceId, streamId: res.streamId, volume });
+  const title = `共有音源 ${tabSources.length + 1}`;
+  const add = await toTab({ type: 'ADD_TAB_SOURCE', sourceId, streamId: pick.streamId, volume });
   if (!add?.ok) {
     setSourceNote(withErrorDetail('音声の取り込みに失敗しました。もう一度お試しください。', add), 'is-bad');
     return;
   }
 
-  tabSources.push({ sourceId, tabId, title, volume, connected: true });
+  tabSources.push({ sourceId, title, volume, connected: true });
   connectedSources.add(sourceId);
   setSourceNote('取り込みました。出力先タブでのみ再生されます。', 'is-good');
   renderTabSources();
 }
 
-/** 切断された（要再接続）ソースを、同じタブから取り込み直す */
+/**
+ * 切断された（要再接続）ソースを取り込み直す。
+ * desktopCapture では選んだタブを特定できないため、再接続でも共有ピッカーを
+ * 開いて選び直す（sourceId・音量は引き継ぐ）。
+ */
 async function reconnectSource(src) {
   if (targetTabId == null) {
     setSourceNote('先に出力先タブへ接続してください。', 'is-bad');
     return;
   }
-  setSourceNote('再接続しています…', '');
-  const res = await chrome.runtime.sendMessage({ type: 'GET_STREAM_ID', sourceTabId: src.tabId });
-  if (!res?.ok) {
-    setSourceNote(withErrorDetail('タブが見つかりません。閉じられた可能性があります。', res), 'is-bad');
+  setSourceNote('取り込むタブを選び直してください…', '');
+  const pick = await pickTabAudioStream();
+  if (!pick.ok) {
+    setSourceNote(pickErrorText(pick.reason), pick.reason === 'cancel' ? '' : 'is-bad');
     return;
   }
-  const add = await toTab({ type: 'ADD_TAB_SOURCE', sourceId: src.sourceId, streamId: res.streamId, volume: src.volume });
+  const add = await toTab({ type: 'ADD_TAB_SOURCE', sourceId: src.sourceId, streamId: pick.streamId, volume: src.volume });
   if (!add?.ok) {
     setSourceNote(withErrorDetail('再接続に失敗しました。', add), 'is-bad');
     return;

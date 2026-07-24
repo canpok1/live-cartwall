@@ -8,7 +8,7 @@
   "permissions": [
     "scripting",
     "tabs",
-    "tabCapture",
+    "desktopCapture",
     "storage",
     "unlimitedStorage"
   ],

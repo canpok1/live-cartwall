@@ -64,23 +64,11 @@ async function inject(tabId) {
   });
 }
 
-/* ---------- タブ音源のキャプチャ ID を発行 ----------
- * ソースタブ（他タブで鳴っている音声）を、出力タブが getUserMedia で
- * 受け取れるように、そのペア専用の streamId を発行する。
- * targetTabId  : 音を取り込む「ソースタブ」
- * consumerTabId: 音を受け取って再生する「出力タブ」
+/* ---------- パネルからのメッセージ中継 ----------
+ * タブ音源の streamId は、パネル（拡張ページ）から chrome.desktopCapture の
+ * 共有ピッカーで取得する。tabCapture.getMediaStreamId は取り込み対象タブに
+ * activeTab 権限を要求し、パネルから選ぶ他タブでは常に失敗するため使わない。
  */
-function getStreamId(options) {
-  return new Promise((resolve, reject) => {
-    chrome.tabCapture.getMediaStreamId(options, (streamId) => {
-      const err = chrome.runtime.lastError;
-      if (err) reject(new Error(err.message));
-      else resolve(streamId);
-    });
-  });
-}
-
-/* ---------- パネルからのメッセージ中継 ---------- */
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
@@ -115,22 +103,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               active: Boolean(t.active) && normalWinIds.has(t.windowId)
             }))
         });
-        return;
-      }
-
-      if (msg?.type === 'GET_STREAM_ID') {
-        const { targetTabId } = await chrome.storage.local.get('targetTabId');
-        if (targetTabId == null) { sendResponse({ ok: false, error: 'NO_TAB' }); return; }
-        if (msg.sourceTabId === targetTabId) { sendResponse({ ok: false, error: 'SELF_CAPTURE' }); return; }
-        try {
-          const streamId = await getStreamId({
-            targetTabId: msg.sourceTabId,
-            consumerTabId: targetTabId
-          });
-          sendResponse({ ok: true, streamId });
-        } catch (e) {
-          sendResponse({ ok: false, error: String(e) });
-        }
         return;
       }
 
