@@ -434,6 +434,39 @@ function renderTabSources() {
   updateSourceStatus();
 }
 
+/**
+ * ソース名をインラインで編集する。desktopCapture では取り込んだタブを特定
+ * できず名前が自動採番のため、利用者が分かりやすい名前を付けられるようにする。
+ * tabSources は揮発的なのでセッション内でのみ保持する。
+ */
+function startRename(src, nameEl) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'tsrc__rename';
+  input.value = src.title;
+  input.maxLength = 40;
+  input.setAttribute('aria-label', 'タブ音源の名前');
+  nameEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const commit = (save) => {
+    if (done) return;
+    done = true;
+    if (save) {
+      const v = input.value.trim();
+      if (v) src.title = v;
+    }
+    renderTabSources();
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); commit(false); }
+  });
+  input.addEventListener('blur', () => commit(true));
+}
+
 function renderTabSource(src) {
   const connected = connectedSources.has(src.sourceId);
 
@@ -452,7 +485,13 @@ function renderTabSource(src) {
   const name = document.createElement('span');
   name.className = 'tsrc__name';
   name.textContent = src.title;
-  name.title = src.title;
+  name.title = `${src.title}（クリックで名前を変更）`;
+  name.tabIndex = 0;
+  name.setAttribute('role', 'button');
+  name.addEventListener('click', () => startRename(src, name));
+  name.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startRename(src, name); }
+  });
 
   const del = document.createElement('button');
   del.className = 'tsrc__x';

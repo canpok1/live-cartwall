@@ -269,7 +269,24 @@ body {
   white-space: nowrap;
   font-size: 12.5px;
   font-weight: 500;
+  cursor: text;
+  border-radius: 3px;
 }
+.tsrc__name:hover { background: rgba(255, 255, 255, .06); }
+.tsrc__name:focus-visible { outline: 1px solid var(--cool); outline-offset: 1px; }
+
+.tsrc__rename {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--cool);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+.tsrc__rename:focus { outline: none; }
 
 .tsrc__x {
   font-family: var(--mono);
