@@ -73,11 +73,13 @@ function render() {
 
   $('btnOpenPanel').classList.toggle('is-hidden', !connected);
   $('btnOpenPanel').textContent = hasAudio ? '操作パネルを開く' : '操作パネルを開いて音声ファイルを追加';
+  // ステップ3（音声あり）は「操作パネルを開く」を取り込みボタンより上に出す。
+  $('btnOpenPanel').style.order = (connected && hasAudio) ? '-1' : '';
 
   // --- 見出しと説明文 ---
   let title, desc;
   if (!connected) {
-    title = 'まずは音声を再生する場所を決めましょう';
+    title = '音声を再生する場所を決めましょう';
     desc = capturable
       ? '音声はここで選んだタブの中で再生されます。共有するスライドや配信画面のタブで、下のボタンを押してください。'
       : 'このタブ（Chromeの内部ページなど）は再生タブにできません。動画や資料などのタブで開き直してください。';
@@ -86,7 +88,7 @@ function render() {
     desc = sourceStepDesc(isOutput, capturable);
   } else {
     title = '音声を再生しましょう';
-    desc = '操作パネルの再生ボタンで音を鳴らせます。音声を足すときは、webページはそのタブで取り込み、音声ファイルは操作パネルから追加します。';
+    desc = '操作パネルでは音量調整や再生・停止が行えます。webページの音声はwebページ側で操作してください。';
   }
   $('stepMsg').textContent = title;
   const d = $('desc');
@@ -94,16 +96,13 @@ function render() {
   d.className = 'menu__desc'; // 直前の is-good/is-bad 着色をリセット
 }
 
-/* ステップ2（再生タブ設定済み・音声未設定）の説明文。現在タブの状態で出し分ける。 */
+/* ステップ2（再生タブ設定済み・音声未設定）の説明文。現在タブの状態で出し分ける。
+ * 基本文は共通で、取り込めない状況のときだけ末尾に理由を添える。 */
 function sourceStepDesc(isOutput, capturable) {
-  if (isOutput) {
-    // 現在タブ＝再生タブ自身なので取り込みボタンが押せない。理由と次の行動を示す。
-    return 'いま開いているこのタブは再生タブ自身なので、音声は取り込めません。webページの音声はそのタブでこのメニューを開いて取り込み、音声ファイルは操作パネルから追加します。';
-  }
-  if (!capturable) {
-    return 'このタブは取り込めません（Chromeの内部ページなど）。webページの音声はそのタブでメニューを開いて取り込み、音声ファイルは操作パネルから追加します。';
-  }
-  return '「このタブの音声を取り込む」で、このタブの音声を再生タブへ流せます。効果音などの音声ファイルは操作パネルから追加できます。';
+  const base = 'webページや音声ファイルから音声を再生可能です。webページの音声はそのタブでこのメニューを開いて取り込み、音声ファイルは操作パネルから追加します。';
+  if (isOutput) return base + 'このタブは再生タブなので取り込めません。';
+  if (!capturable) return base + 'このタブはChrome内部ページなので取り込めません。';
+  return base;
 }
 
 /** tabCapture.getMediaStreamId を Promise 化。lastError は reject する。 */
