@@ -49,17 +49,16 @@ function render() {
   const connected = targetTabId != null;
   const isOutput = connected && cur && cur.id === targetTabId;
 
-  $('curTab').textContent = cur ? (cur.title || '(無題)') : '(タブを取得できません)';
-
   const outStatus = $('outStatus');
   outStatus.textContent = connected ? (targetTabTitle ? `接続中 · ${targetTabTitle}` : '接続中') : '未接続';
   outStatus.className = `menu__status ${connected ? 'is-on' : 'is-off'}`;
 
-  // 再生タブボタン：現在タブが再生タブなら「切断」、それ以外は「再生タブにする」
+  // 再生タブは同時に1つ。いずれかに設定中は「切断」しか出さない（別タブへ
+  // 設定し直すには必ず切断を挟ませる）。未接続のときだけ「再生タブにする」。
   const btnSet = $('btnSetOutput');
   const btnDisc = $('btnDisconnect');
-  btnSet.classList.toggle('is-hidden', isOutput);
-  btnDisc.classList.toggle('is-hidden', !isOutput);
+  btnSet.classList.toggle('is-hidden', connected);
+  btnDisc.classList.toggle('is-hidden', !connected);
   btnSet.disabled = !(cur && isCapturable(cur.url));
 
   const srcStatus = $('srcStatus');
@@ -71,9 +70,11 @@ function render() {
   $('btnAddSource').disabled = !canAdd;
 
   if (!connected) {
-    setNote('先に再生タブを設定してください。', '');
+    setNote(cur && !isCapturable(cur.url)
+      ? 'このタブは再生タブにできません（Chromeの内部ページなど）。'
+      : 'まず再生タブを設定してください。', '');
   } else if (isOutput) {
-    setNote('このタブは再生タブです。音源にするなら別のタブでこのメニューを開いてください。', '');
+    setNote('このタブは再生タブです。別のタブを取り込むには、そのタブでこのメニューを開いてください。', '');
   } else if (cur && !isCapturable(cur.url)) {
     setNote('このタブは取り込めません（Chromeの内部ページなど）。', '');
   } else {

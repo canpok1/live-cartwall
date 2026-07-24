@@ -51,28 +51,6 @@ body.menu {
   letter-spacing: .04em;
 }
 
-.menu__cur {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  background: var(--panel);
-  border: 1px solid var(--rule-2);
-  border-radius: 5px;
-}
-.menu__curlabel {
-  font-size: 10px;
-  color: var(--faint);
-  letter-spacing: .08em;
-}
-.menu__curtab {
-  font-size: 12.5px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .menu__sec {
   display: flex;
   flex-direction: column;
