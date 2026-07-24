@@ -14,48 +14,23 @@
     <button class="rail__btn" id="btnReload" type="button" title="音源を読み直す">再読込</button>
   </header>
 
-  <!-- ===== 接続先タブ ===== -->
-  <details class="bay bay--fold" id="bayOutput">
-    <summary class="fold__head">
-      <span class="fold__title">出力先タブ</span>
-      <span class="fold__status is-off" id="outputStatus">未接続</span>
-      <span class="fold__chev" aria-hidden="true">▸</span>
-    </summary>
+  <!-- ===== 再生タブ（接続状態と切断） ===== -->
+  <div class="outbar" id="outbar">
+    <span class="outbar__label">再生タブ</span>
+    <span class="outbar__tab" id="outTab">未設定</span>
+    <button class="outbar__x is-hidden" id="btnDisconnect" type="button" title="再生タブを切断">切断</button>
+  </div>
 
-    <div class="fold__body">
-      <div class="patch">
-        <select id="tabSelect" class="patch__select" aria-label="画面共有するタブ"></select>
-        <button id="btnRefresh" class="btn btn--ghost" type="button" title="タブ一覧を更新">↻</button>
-      </div>
-
-      <button id="btnConnect" class="btn btn--wide" type="button">このタブに接続</button>
-      <button id="btnDisconnect" class="btn btn--wide is-hidden" type="button">切断</button>
-
-      <p class="note" id="connNote">
-        画面共有するスライドのタブを選んで接続します。音はこのタブの中で鳴ります。
-      </p>
-    </div>
-  </details>
-
-  <!-- ===== タブ音源 ===== -->
+  <!-- ===== 音源タブ（一覧・管理） ===== -->
   <details class="bay bay--fold" id="baySource">
     <summary class="fold__head">
-      <span class="fold__title">タブ音源</span>
+      <span class="fold__title">音源タブ</span>
       <span class="fold__status is-off" id="sourceStatus">なし</span>
       <span class="fold__chev" aria-hidden="true">▸</span>
     </summary>
 
     <div class="fold__body">
-      <div class="patch">
-        <select id="sourceSelect" class="patch__select" aria-label="取り込むタブ"></select>
-        <button id="btnAddSource" class="btn btn--ghost" type="button" title="このタブの音声を取り込む">追加</button>
-      </div>
-
       <div id="tabSources" class="tsrc"></div>
-
-      <p class="note" id="sourceNote">
-        他タブで再生中の音声（YouTube・配信・音楽サービス等）を出力先タブに合流させます。再生・停止はそのタブ側で操作し、ここでは音量のみ調整します。
-      </p>
     </div>
   </details>
 
@@ -93,6 +68,8 @@
       <span class="drop__main">音源を追加</span>
       <span class="drop__sub">クリック、またはファイルをドロップ（mp3 / wav / m4a / ogg）</span>
     </label>
+
+    <p class="note" id="libNote"></p>
   </section>
 
   <!-- ===== マスター & 全停止 ===== -->

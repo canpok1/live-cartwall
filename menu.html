@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Live Cartwall</title>
+  <link rel="stylesheet" href="menu.css" />
+</head>
+<body class="menu">
+
+  <header class="menu__head">
+    <span class="menu__lamp" aria-hidden="true"></span>
+    <span class="menu__brand">Live Cartwall</span>
+  </header>
+
+  <!-- 各ステップを「見出し → 説明文 → ボタン」の縦流れで表示する。
+       内容は状態に応じて menu.js が出し分ける。 -->
+  <h2 class="menu__title" id="stepMsg">まずは音声を再生する場所を決めましょう</h2>
+  <p class="menu__desc" id="desc"></p>
+
+  <div class="menu__actions">
+    <button class="mbtn" id="btnSetOutput" type="button">このタブを再生タブにする</button>
+    <button class="mbtn is-hidden" id="btnAddSource" type="button" disabled>このタブの音声を取り込む</button>
+    <button class="mbtn is-hidden" id="btnOpenPanel" type="button">操作パネルを開く</button>
+  </div>
+
+  <script src="menu.js"></script>
+</body>
+</html>

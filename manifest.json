@@ -19,6 +19,7 @@
   },
 
   "action": {
-    "default_title": "操作パネルを開く"
+    "default_title": "Live Cartwall",
+    "default_popup": "menu.html"
   }
 }
