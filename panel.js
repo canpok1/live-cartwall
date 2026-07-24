@@ -13,6 +13,7 @@ const el = {
   tabSelect: $('tabSelect'),
   btnRefresh: $('btnRefresh'),
   btnConnect: $('btnConnect'),
+  btnDisconnect: $('btnDisconnect'),
   connNote: $('connNote'),
   bayOutput: $('bayOutput'),
   outputStatus: $('outputStatus'),
@@ -46,6 +47,8 @@ let masterVolume = 1;
 let tileWidth = 96;
 let tileHeight = 72;
 let targetTabId = null;
+/* 接続中タブの表示名。折りたたみ見出しの要約に出す。targetTabId と併せて永続化する。 */
+let targetTabTitle = '';
 let playingIds = new Set();
 /* 'edit' … タイル編集可（kebab・追加ドロップを表示） / 'operate' … タップ再生のみ */
 let mode = 'edit';
@@ -56,6 +59,8 @@ let draggedId = null;
  * 各要素: { sourceId, tabId, title, volume, connected } */
 let tabSources = [];
 let connectedSources = new Set();
+/* LIST_TABS で得た全タブ（接続中タブのタイトル解決に使う） */
+let allTabs = [];
 /* ソース選択に出す候補タブ（LIST_TABS の結果から出力タブを除外） */
 let availableTabs = [];
 
@@ -111,10 +116,11 @@ function applyTileColor(tile, color, kind) {
 /* ---------- ストレージ ---------- */
 
 async function loadState() {
-  const s = await chrome.storage.local.get(['sounds', 'masterVolume', 'targetTabId', 'mode', 'tileWidth', 'tileHeight']);
+  const s = await chrome.storage.local.get(['sounds', 'masterVolume', 'targetTabId', 'targetTabTitle', 'mode', 'tileWidth', 'tileHeight']);
   sounds = s.sounds ?? [];
   masterVolume = s.masterVolume ?? 1;
   targetTabId = s.targetTabId ?? null;
+  targetTabTitle = s.targetTabTitle ?? '';
   mode = s.mode === 'operate' ? 'operate' : 'edit';
   tileWidth = s.tileWidth ?? 96;
   tileHeight = s.tileHeight ?? 72;
@@ -150,6 +156,17 @@ async function refreshTabs() {
   const res = await chrome.runtime.sendMessage({ type: 'LIST_TABS' });
   if (!res?.ok) return;
 
+  allTabs = res.tabs;
+
+  // 接続中タブが一覧にあればタイトルを最新化（タブ名変更・遷移に追従）
+  if (targetTabId != null) {
+    const cur = allTabs.find((t) => t.id === targetTabId);
+    if (cur) {
+      targetTabTitle = cur.title;
+      chrome.storage.local.set({ targetTabTitle });
+    }
+  }
+
   el.tabSelect.innerHTML = '';
   for (const t of res.tabs) {
     const opt = document.createElement('option');
@@ -167,7 +184,7 @@ async function refreshTabs() {
   }
 
   // ソース候補（出力先タブは自己キャプチャ防止のため除外）
-  availableTabs = res.tabs.filter((t) => t.id !== targetTabId);
+  availableTabs = allTabs.filter((t) => t.id !== targetTabId);
   el.sourceSelect.innerHTML = '';
   for (const t of availableTabs) {
     const opt = document.createElement('option');
@@ -181,6 +198,9 @@ async function refreshTabs() {
     opt.disabled = true;
     el.sourceSelect.appendChild(opt);
   }
+
+  // タイトルが最新化されている場合があるので要約も更新する
+  updateOutputStatus();
 }
 
 async function connect() {
@@ -192,12 +212,44 @@ async function connect() {
 
   if (res?.ok) {
     targetTabId = tabId;
+    targetTabTitle = allTabs.find((t) => t.id === tabId)?.title ?? '';
+    await chrome.storage.local.set({ targetTabId, targetTabTitle });
     setNote('接続しました。このタブの中で音が鳴ります。', 'is-good');
-    updateOutputStatus();
+    applyConnectionState();
     poll();
   } else {
     setNote('このタブには接続できません（Chromeの設定ページやストアのページなど）。別のタブを選んでください。', 'is-bad');
   }
+}
+
+/**
+ * 出力先タブへ明示的に切断する。
+ * 出力先タブの全再生を即停止しタブ音源のルーティングも解放したうえで、
+ * targetTabId をクリアして未接続状態へ戻す（旧タブに音を残さない）。
+ */
+async function disconnect() {
+  await resetConnectionState({ stopTab: true });
+  setNote('切断しました。別のタブを選んで接続できます。', '');
+  setRail('', '待機中');
+}
+
+/**
+ * 接続状態をローカルで解除し、UIを未接続へ戻す。
+ * stopTab=true のときだけ出力先タブへ STOP_ALL immediate を送る
+ *（タブが閉じられて存在しない場合の整合では送らない）。
+ */
+async function resetConnectionState({ stopTab }) {
+  if (stopTab) await toTab({ type: 'STOP_ALL', immediate: true });
+  await chrome.storage.local.remove(['targetTabId', 'targetTabTitle']);
+  targetTabId = null;
+  targetTabTitle = '';
+  tabSources = [];
+  connectedSources = new Set();
+  playingIds = new Set();
+  renderTabSources();
+  paintLive();
+  applyConnectionState();
+  await refreshTabs();
 }
 
 function setNote(text, cls) {
@@ -208,8 +260,22 @@ function setNote(text, cls) {
 /* 折りたたみ見出しの要約（出力先タブの接続状態）を更新する */
 function updateOutputStatus() {
   const connected = targetTabId != null;
-  el.outputStatus.textContent = connected ? '接続中' : '未接続';
+  el.outputStatus.textContent = connected
+    ? (targetTabTitle ? `接続中 · ${targetTabTitle}` : '接続中')
+    : '未接続';
   el.outputStatus.className = `fold__status ${connected ? 'is-on' : 'is-off'}`;
+}
+
+/**
+ * 接続状態に応じて出力先タブUIを切り替える。
+ * 接続中はタブ選択を無効化し、接続ボタンを隠して切断ボタンを出す。
+ */
+function applyConnectionState() {
+  const connected = targetTabId != null;
+  el.tabSelect.disabled = connected;
+  el.btnConnect.classList.toggle('is-hidden', connected);
+  el.btnDisconnect.classList.toggle('is-hidden', !connected);
+  updateOutputStatus();
 }
 
 /* ---------- タブ音源（ライブ音声のルーティング） ---------- */
@@ -830,6 +896,12 @@ function handleTabResult(res) {
 
   if (res.error === 'NO_TAB') {
     setRail('warn', '出力先タブが未設定');
+    // パネルは接続中と認識しているのに出力先タブが消えている
+    //（タブが外部で閉じられた等）。未接続へ整合し、操作不能を防ぐ。
+    if (targetTabId != null) {
+      setNote('出力先タブが見つかりません。切断しました。別のタブを選んで接続してください。', 'is-bad');
+      resetConnectionState({ stopTab: false });
+    }
     return;
   }
   if (res.error === 'NOT_INJECTED') {
@@ -887,6 +959,7 @@ document.addEventListener('click', (e) => {
 
 el.btnRefresh.addEventListener('click', refreshTabs);
 el.btnConnect.addEventListener('click', connect);
+el.btnDisconnect.addEventListener('click', disconnect);
 el.btnAddSource.addEventListener('click', addSource);
 el.btnReload.addEventListener('click', async () => {
   const res = await toTab({ type: 'RELOAD' });
@@ -951,7 +1024,7 @@ el.btnStopAll.addEventListener('click', async () => {
   applyTileSize();
   await refreshTabs();
 
-  updateOutputStatus();
+  applyConnectionState();
   updateSourceStatus();
 
   if (targetTabId != null) {

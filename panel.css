@@ -225,6 +225,9 @@ body {
 .btn--wide { display: block; width: 100%; }
 .btn--ghost { background: transparent; padding: 8px 10px; }
 
+/* 表示切替の汎用ユーティリティ。.btn--wide の display:block を上書きするため !important */
+.is-hidden { display: none !important; }
+
 /* ---------- タブ音源 ---------- */
 
 .tsrc { display: flex; flex-direction: column; gap: 6px; }
