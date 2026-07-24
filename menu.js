@@ -76,11 +76,13 @@ function render() {
 
   if (!connected) {
     setNote('', '');
+  } else if (isOutput) {
+    // 現在タブ＝再生タブ自身なので取り込み不可。理由と次の行動を必ず示す。
+    setNote('このタブは再生タブなので、このタブ自身の音声は取り込めません。webページの音声を流すには、その音声を再生しているタブでこのメニューを開いて取り込んでください。音声ファイルを使うなら下のボタンから追加できます。', '');
   } else if (cur && !isCapturable(cur.url)) {
     setNote('このタブは取り込めません（Chromeの内部ページなど）。', '');
   } else {
-    // 「今このタブを取り込む」動線が伝わるよう、webページのタブ上で押す旨を明記。
-    setNote('webページの音声を再生したい場合は、webページを表示したタブ上で取り込むボタンを押してください。', '');
+    setNote('「このタブの音声を取り込む」を押すと、このタブの音声が再生タブで流れます。', '');
   }
 
   // --- 操作パネル section（音声ファイル追加 / 再生） ---
@@ -122,12 +124,13 @@ $('btnSetOutput').addEventListener('click', async () => {
   if (!cur) return;
   setNote('接続しています…', '');
   const res = await chrome.runtime.sendMessage({ type: 'INJECT', tabId: cur.id, title: cur.title || '' });
+  if (!res?.ok) {
+    setNote('このタブには接続できません（Chromeの設定ページやストアなど）。', 'is-bad');
+    return;
+  }
+  // 成功時は render() が状態に応じた案内（＝次にやること）を表示する
   await loadState();
   render();
-  setNote(res?.ok
-    ? 'このタブを再生タブにしました。'
-    : 'このタブには接続できません（Chromeの設定ページやストアなど）。',
-    res?.ok ? 'is-good' : 'is-bad');
 });
 
 $('btnAddSource').addEventListener('click', async () => {
