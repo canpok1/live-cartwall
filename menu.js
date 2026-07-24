@@ -159,7 +159,7 @@ $('btnAddSource').addEventListener('click', async () => {
   sources = [...sources, { sourceId, title, volume }];
   await chrome.storage.local.set({ tabSources: sources });
   render();
-  setNote(`「${title}」を取り込みました。音量・解除は操作パネルで調整できます。`, 'is-good');
+  setNote(`「${title}」を取り込みました。webページで再生すると再生タブ上で再生されます。音量・解除は操作パネルで調整できます。`, 'is-good');
 });
 
 $('btnOpenPanel').addEventListener('click', async () => {
