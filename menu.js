@@ -16,8 +16,9 @@ const $ = (id) => document.getElementById(id);
 let cur = null;          // 現在のタブ {id, title, url}
 let targetTabId = null;  // 再生タブ（出力先）
 let targetTabTitle = '';
-let sources = [];        // 音源タブ（取り込み）メタ [{ sourceId, title, volume }]
+let sources = [];        // 音源タブ（取り込み）メタ [{ sourceId, tabId, title, volume }]
 let soundCount = 0;      // 音源ファイル（再生ボタン）の数
+let connectedSourceIds = new Set(); // 出力タブで現在ルーティング中の sourceId
 
 /** キャプチャ・注入ができないタブ（Chrome内部ページ・ストア等）を弾く */
 function isCapturable(url) {
@@ -39,6 +40,15 @@ async function loadState() {
   targetTabTitle = s.targetTabTitle ?? '';
   sources = Array.isArray(s.tabSources) ? s.tabSources : [];
   soundCount = Array.isArray(s.sounds) ? s.sounds.length : 0;
+}
+
+/* 出力タブに PING して「現在ルーティング中の sourceId」を取り込み済み判定に使う。
+ * 出力タブが未注入・未応答なら空集合（=どれも接続していない扱い）にする。 */
+async function refreshConnected() {
+  connectedSourceIds = new Set();
+  if (targetTabId == null) return;
+  const res = await chrome.runtime.sendMessage({ type: 'TO_TAB', payload: { type: 'PING' } });
+  if (res?.ok && Array.isArray(res.tabSources)) connectedSourceIds = new Set(res.tabSources);
 }
 
 /* 説明文（#desc）に一時メッセージを出す。cls は is-good / is-bad。 */
@@ -68,8 +78,23 @@ function render() {
   $('btnSetOutput').disabled = !capturable;
 
   $('btnAddSource').classList.toggle('is-hidden', !connected);
-  // 取り込み可否：再生タブ設定済み & 現在タブが再生タブ自身でない & キャプチャ可能
-  $('btnAddSource').disabled = !(connected && cur && cur.id !== targetTabId && capturable);
+  // 取り込み可否の基本条件：再生タブ設定済み & 現在タブが再生タブ自身でない & キャプチャ可能
+  const canCapture = connected && cur && cur.id !== targetTabId && capturable;
+  // 現在タブ由来のソース（tabId 一致）が既にあるか、あれば接続中かで出し分ける。
+  const mine = cur ? sources.find((s) => s.tabId === cur.id) : null;
+  const mineConnected = Boolean(mine && connectedSourceIds.has(mine.sourceId));
+  if (mineConnected) {
+    // 取り込み済み＆接続中：二重取り込み（＝エラー）を防ぐため押せなくする。
+    $('btnAddSource').textContent = '取り込み済み';
+    $('btnAddSource').disabled = true;
+  } else if (mine) {
+    // 取り込み済みだがルーティングが切れている：再接続の導線として押せるようにする。
+    $('btnAddSource').textContent = 'このタブを取り込み直す';
+    $('btnAddSource').disabled = !canCapture;
+  } else {
+    $('btnAddSource').textContent = 'このタブの音声を取り込む';
+    $('btnAddSource').disabled = !canCapture;
+  }
 
   $('btnOpenPanel').classList.toggle('is-hidden', !connected);
   $('btnOpenPanel').textContent = hasAudio ? '操作パネルを開く' : '操作パネルを開いて音声ファイルを追加';
@@ -134,6 +159,11 @@ $('btnSetOutput').addEventListener('click', async () => {
 $('btnAddSource').addEventListener('click', async () => {
   if (targetTabId == null || !cur || cur.id === targetTabId) return;
 
+  // 現在タブが既に取り込み済みか（tabId 一致）。接続中なら二重取り込みになるので弾く
+  //（ボタンは無効のはずだが二重防御）。切断中なら同じ sourceId で再接続する。
+  const existing = sources.find((s) => s.tabId === cur.id);
+  if (existing && connectedSourceIds.has(existing.sourceId)) return;
+
   // ユーザー操作＋activeTab が要るので、まず getStreamId を呼ぶ（他の await より先）。
   let streamId;
   try {
@@ -143,9 +173,11 @@ $('btnAddSource').addEventListener('click', async () => {
     return;
   }
 
-  const sourceId = crypto.randomUUID();
-  const volume = 0.8;
-  const title = cur.title || '(無題)';
+  // 再接続時は既存の sourceId・名前・音量を引き継ぐ（content 側が同一 sourceId で
+  // 既存ルーティングを作り直すので重複しない）。新規取り込みのみ新規発行する。
+  const sourceId = existing ? existing.sourceId : crypto.randomUUID();
+  const volume = existing ? existing.volume : 0.8;
+  const title = existing ? existing.title : (cur.title || '(無題)');
 
   const add = await chrome.runtime.sendMessage({
     type: 'TO_TAB',
@@ -156,10 +188,21 @@ $('btnAddSource').addEventListener('click', async () => {
     return;
   }
 
-  sources = [...sources, { sourceId, title, volume }];
+  if (existing) {
+    // 既存エントリを再利用（tabId は不変だが念のため補完）。重複追加はしない。
+    sources = sources.map((s) => (s.sourceId === sourceId ? { ...s, tabId: cur.id } : s));
+  } else {
+    sources = [...sources, { sourceId, tabId: cur.id, title, volume }];
+  }
   await chrome.storage.local.set({ tabSources: sources });
+  await refreshConnected(); // ボタンを「取り込み済み」に更新するため接続状態を取り直す
   render();
-  setNote(`「${title}」を取り込みました。webページで再生すると再生タブ上で再生されます。音量・解除は操作パネルで調整できます。`, 'is-good');
+  setNote(
+    existing
+      ? `「${title}」を取り込み直しました。webページで再生すると再生タブ上で再生されます。`
+      : `「${title}」を取り込みました。webページで再生すると再生タブ上で再生されます。音量・解除は操作パネルで調整できます。`,
+    'is-good'
+  );
 });
 
 $('btnOpenPanel').addEventListener('click', async () => {
@@ -172,5 +215,6 @@ $('btnOpenPanel').addEventListener('click', async () => {
 (async function init() {
   cur = await getCurrentTab();
   await loadState();
+  await refreshConnected();
   render();
 })();

@@ -51,7 +51,7 @@ let draggedId = null;
 
 /* タブ音源（ライブ音声のルーティング）のメタ情報。実ストリームは content 側。
  * 取り込みはアイコンメニューが行い、メタは storage.tabSources で共有する。
- * 各要素: { sourceId, title, volume } */
+ * 各要素: { sourceId, tabId, title, volume } */
 let tabSources = [];
 let connectedSources = new Set();
 
@@ -182,10 +182,11 @@ function updateSourceStatus() {
   }
 }
 
-/** タブ音源メタ（sourceId/title/volume）を storage へ保存し、メニューと共有する。 */
+/** タブ音源メタ（sourceId/tabId/title/volume）を storage へ保存し、メニューと共有する。
+ * tabId は取り込み済み判定（メニュー側）に使うので保存時に落とさない。 */
 async function persistTabSources() {
   await chrome.storage.local.set({
-    tabSources: tabSources.map((s) => ({ sourceId: s.sourceId, title: s.title, volume: s.volume }))
+    tabSources: tabSources.map((s) => ({ sourceId: s.sourceId, tabId: s.tabId, title: s.title, volume: s.volume }))
   });
 }
 
